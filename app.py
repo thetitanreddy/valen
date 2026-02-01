@@ -15,15 +15,11 @@ st.set_page_config(
 )
 
 # ---------------- 2. FIREBASE SETUP ----------------
-# Checks for existing app to prevent connection errors on reload
 if not firebase_admin._apps:
-    # Try loading from Streamlit Cloud Secrets (Deployment)
     if "firebase" in st.secrets:
         key_dict = dict(st.secrets["firebase"])
         cred = credentials.Certificate(key_dict)
         firebase_admin.initialize_app(cred)
-    
-    # Fallback to local file (Local Testing)
     else:
         try:
             cred = credentials.Certificate("firebase_key.json")
@@ -34,70 +30,62 @@ if not firebase_admin._apps:
 
 db = firestore.client()
 
-# ---------------- 3. CLASSICAL B&W STYLING ----------------
+# ---------------- 3. CLEAN MATTE BLACK STYLING ----------------
 st.markdown("""
 <style>
-/* 1. Import Classical Fonts (Cinzel for titles, Lato for text) */
+/* 1. Import Classical Fonts */
 @import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Lato:wght@300;400&display=swap');
 
-/* 2. THE BACKGROUND (Running Horses in B&W) */
+/* 2. THE BACKGROUND - Solid Matte Black */
 .stApp {
-    background-image: url('https://images.unsplash.com/photo-1506504287829-9c5952c4aa37?q=80&w=2070&auto=format&fit=crop');
-    background-size: cover;
-    background-attachment: fixed;
-    background-position: center center;
+    background-color: #121212 !important;
+    background-image: none !important;
 }
 
-/* 3. GLASSMORPHISM CARD (Transparent Dark Glass) */
-div.card {
-    background-color: rgba(0, 0, 0, 0.65); /* Dark see-through */
-    backdrop-filter: blur(12px); /* Blur effect */
-    -webkit-backdrop-filter: blur(12px);
-    padding: 40px;
-    border-radius: 15px;
-    text-align: center;
-    box-shadow: 0px 10px 40px rgba(0, 0, 0, 0.8);
-    border: 1px solid rgba(255, 255, 255, 0.15); /* Subtle border */
-    margin-top: 20px;
-    margin-bottom: 20px;
-    color: #ffffff !important;
-}
-
-/* 4. TYPOGRAPHY */
+/* 3. TYPOGRAPHY */
 h1 {
     font-family: 'Cinzel Decorative', cursive;
     color: #ffffff !important;
-    text-shadow: 0px 4px 10px rgba(0,0,0,0.9);
     font-size: 3.5rem !important;
     text-align: center;
     font-weight: 700 !important;
+    margin-bottom: 30px !important;
 }
 
-h2, h3, p, label, .stMarkdown, .stCheckbox {
+h2, h3, p, label, .stMarkdown, .stCheckbox, .stCaption {
     font-family: 'Lato', sans-serif;
-    color: #ffffff !important;
-    text-shadow: 0px 2px 4px rgba(0,0,0,0.8);
+    color: #e0e0e0 !important;
 }
 
-/* 5. INPUT FIELDS (Transparent) */
+/* Message Text Styling */
+.message-content {
+    font-family: 'Cinzel Decorative', cursive;
+    font-size: 32px;
+    color: #ffffff;
+    text-align: center;
+    margin: 40px 0;
+}
+
+/* 4. INPUT FIELDS (Subtle Charcoal) */
 .stTextArea textarea, .stSelectbox > div > div, .stTextInput > div > div {
-    background-color: rgba(20, 20, 20, 0.6) !important;
+    background-color: #2b2b2b !important; /* Dark Charcoal */
     border-radius: 8px !important;
-    border: 1px solid rgba(255, 255, 255, 0.3) !important;
+    border: 1px solid #404040 !important;
     color: #ffffff !important;
     font-family: 'Lato', sans-serif !important;
 }
 /* Dropdown menu items */
 ul[data-testid="stSelectboxVirtualDropdown"] {
     background-color: #2b2b2b !important;
+    color: white !important;
 }
 
 /* Placeholder Color */
 ::placeholder { 
-  color: rgba(255, 255, 255, 0.6) !important;
+  color: #888888 !important;
 }
 
-/* 6. BUTTON STYLING (Classical Metallic) */
+/* 5. BUTTON STYLING (Classical Metallic) */
 div.stButton > button {
     background: linear-gradient(180deg, #4b4b4b, #1e1e1e);
     color: #e0e0e0;
@@ -111,6 +99,7 @@ div.stButton > button {
     width: 100%;
     text-transform: uppercase;
     letter-spacing: 2px;
+    margin-top: 20px;
 }
 div.stButton > button:hover {
     transform: scale(1.02);
@@ -153,8 +142,7 @@ if "id" in query:
     doc_ref = db.collection("links").document(link_id)
     doc = doc_ref.get()
 
-    # Glass Card Wrapper for Receiver
-    st.markdown("<div class='card'>", unsafe_allow_html=True)
+    # No card wrapper here anymore
 
     if not doc.exists:
         st.error("❌ The wind has blown this message away. (Invalid Link)")
@@ -195,9 +183,9 @@ if "id" in query:
         # 4. Show Message
         else:
             st.balloons()
-            # We use HTML directly for better font control
-            st.markdown(f"<h2 style='font-family: Cinzel Decorative; font-size: 32px; color: white;'>“{data['message']}”</h2>", unsafe_allow_html=True)
-            st.markdown("<p style='opacity: 0.8;'>— Anonymous</p>", unsafe_allow_html=True)
+            # Clean message display without a box
+            st.markdown(f"<div class='message-content'>“{data['message']}”</div>", unsafe_allow_html=True)
+            st.markdown("<p style='text-align: center; opacity: 0.8;'>— Anonymous</p>", unsafe_allow_html=True)
             
             st.divider()
             
@@ -205,9 +193,8 @@ if "id" in query:
                 st.success("This secret is now locked in the past.")
             else:
                 st.success("You can return to this memory until it expires.")
-
-    st.markdown("</div>", unsafe_allow_html=True)
     
+    st.markdown("<br>", unsafe_allow_html=True)
     if st.button("Compose Your Own"):
         st.query_params.clear()
         st.rerun()
@@ -219,54 +206,53 @@ if "id" in query:
 st.title("Cupid's Secret")
 st.markdown("<h3 style='text-align: center; color: rgba(255,255,255,0.8); font-size: 1.2rem;'>Compose a timeless message</h3>", unsafe_allow_html=True)
 
-# NO CARD WRAPPER HERE - Inputs sit directly on background (styled transparently via CSS)
-with st.container():
-    
-    st.markdown("<br>", unsafe_allow_html=True)
-    message = st.text_area("Your Confession", placeholder="Write your secret here...", max_chars=300)
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        expiry_minutes = st.selectbox("Duration", [15, 30, 60, 1440], format_func=lambda x: f"{x} Minutes" if x < 60 else "24 Hours")
-    with col2:
-        st.write("") 
-        st.write("")
-        # Checkbox for Vanishing Mode
-        is_one_time = st.checkbox("Vanish after one view?", value=True)
+# No container or card wrappers here
+st.markdown("<br>", unsafe_allow_html=True)
+message = st.text_area("Your Confession", placeholder="Write your secret here...", max_chars=300)
 
-    st.markdown("<br>", unsafe_allow_html=True)
+col1, col2 = st.columns(2)
+with col1:
+    expiry_minutes = st.selectbox("Duration", [15, 30, 60, 1440], format_func=lambda x: f"{x} Minutes" if x < 60 else "24 Hours")
+with col2:
+    st.write("") 
+    st.write("")
+    # Checkbox for Vanishing Mode
+    is_one_time = st.checkbox("Vanish after one view?", value=True)
 
-    if st.button("Seal & Generate Link 📜"):
-        if not message.strip():
-            st.error("The parchment cannot be empty.")
-        else:
-            link_id = secrets.token_urlsafe(8)
-            expiry_ts = int((datetime.now() + timedelta(minutes=expiry_minutes)).timestamp())
+st.markdown("<br>", unsafe_allow_html=True)
+
+if st.button("Seal & Generate Link 📜"):
+    if not message.strip():
+        st.error("The parchment cannot be empty.")
+    else:
+        link_id = secrets.token_urlsafe(8)
+        expiry_ts = int((datetime.now() + timedelta(minutes=expiry_minutes)).timestamp())
+        
+        doc_data = {
+            "message": message,
+            "created_at": int(time.time()),
+            "expiry": expiry_ts,
+            "opened": False,
+            "one_time": is_one_time
+        }
+        
+        try:
+            with st.spinner("Sealing your secret..."):
+                db.collection("links").document(link_id).set(doc_data)
+                time.sleep(0.5)
             
-            doc_data = {
-                "message": message,
-                "created_at": int(time.time()),
-                "expiry": expiry_ts,
-                "opened": False,
-                "one_time": is_one_time
-            }
+            base_url = get_public_base_url()
+            share_link = f"{base_url}/?id={link_id}"
             
-            try:
-                with st.spinner("Sealing your secret..."):
-                    db.collection("links").document(link_id).set(doc_data)
-                    time.sleep(0.5)
-                
-                base_url = get_public_base_url()
-                share_link = f"{base_url}/?id={link_id}"
-                
-                # Show Result in a Glass Card for contrast
-                st.markdown("<div class='card'>", unsafe_allow_html=True)
-                st.success("✨ Your message has been sealed.")
-                st.code(share_link)
-                
-                qr_img = generate_qr(share_link)
-                st.image(qr_img, width=200, caption="Scan to Reveal")
-                st.markdown("</div>", unsafe_allow_html=True)
-                
-            except Exception as e:
-                st.error(f"Error: {e}")
+            # Results shown cleanly without a box wrapper
+            st.success("✨ Your message has been sealed.")
+            st.code(share_link)
+            
+            qr_img = generate_qr(share_link)
+            # Center the QR code
+            col_l, col_c, col_r = st.columns([1,2,1])
+            with col_c:
+                 st.image(qr_img, width=200, caption="Scan to Reveal")
+            
+        except Exception as e:
+            st.error(f"Error: {e}")
