@@ -1,173 +1,84 @@
 import streamlit as st
-import base64
-import urllib.parse
 import qrcode
 import io
-import time
+import base64
+import secrets
 
-# --------------------------------------------------
-# PAGE CONFIG
-# --------------------------------------------------
+# ---------------- CONFIG ----------------
 st.set_page_config(
-    page_title="Cupid’s Surprise 💌",
-    page_icon="💘",
+    page_title="Cupid's Surprise 💘",
+    page_icon="💌",
     layout="centered"
 )
 
-# --------------------------------------------------
-# HELPERS
-# --------------------------------------------------
-def encode_data(text: str) -> str:
-    return urllib.parse.quote(
-        base64.b64encode(text.encode()).decode()
-    )
+# ---------------- SAFE PUBLIC URL ----------------
+def get_public_base_url():
+    headers = st.context.headers
 
-def decode_data(text: str) -> str:
-    try:
-        return base64.b64decode(
-            urllib.parse.unquote(text).encode()
-        ).decode()
-    except Exception:
-        return "Unknown"
-
-def generate_qr(link: str) -> bytes:
-    qr = qrcode.make(link)
-    buf = io.BytesIO()
-    qr.save(buf, format="PNG")
-    return buf.getvalue()
-
-def get_public_base_url() -> str:
-    """
-    Reliable public URL detection:
-    - Streamlit Cloud → works
-    - Custom domain → works
-    - Localhost → BLOCKED
-    """
-    headers = st.request.headers or {}
     host = headers.get("host")
     proto = headers.get("x-forwarded-proto", "https")
 
-    # Block localhost explicitly
-    if not host or "localhost" in host or "127.0.0.1" in host:
-        st.error("🚫 Shareable links are disabled in local mode.")
-        st.info("Please use the deployed Streamlit Cloud URL.")
+    if not host:
+        st.error("🚫 Public link generation is unavailable.")
+        st.stop()
+
+    if "localhost" in host or "127.0.0.1" in host:
+        st.error("🚫 Localhost links are disabled.")
+        st.info("Deploy on Streamlit Cloud to enable sharing.")
         st.stop()
 
     return f"{proto}://{host}"
 
-# --------------------------------------------------
-# STYLES
-# --------------------------------------------------
-def apply_style():
-    st.markdown("""
-    <style>
-    .stApp {
-        background: linear-gradient(to bottom right, #ffe6e6, #ffb3b3);
-    }
-    .card {
-        background: rgba(255,255,255,0.96);
-        border-radius: 25px;
-        padding: 40px;
-        text-align: center;
-        box-shadow: 0 12px 30px rgba(0,0,0,0.15);
-        max-width: 650px;
-        margin: auto;
-    }
-    .message {
-        font-size: 30px;
-        color: #d63384;
-        font-weight: bold;
-        font-family: 'Comic Sans MS', cursive;
-        line-height: 1.6;
-    }
-    .from {
-        margin-top: 20px;
-        font-style: italic;
-        color: #555;
-        font-size: 18px;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+# ---------------- QR GENERATOR ----------------
+def generate_qr(data):
+    qr = qrcode.make(data)
+    buf = io.BytesIO()
+    qr.save(buf, format="PNG")
+    return buf.getvalue()
 
-# --------------------------------------------------
-# QUERY PARAMS
-# --------------------------------------------------
-params = st.query_params
-msg_param = params.get("msg")
-from_param = params.get("from")
+# ---------------- UI ----------------
+st.title("💘 Cupid's Surprise")
+st.caption("Anonymous Crush Confession Generator")
 
-# ==================================================
-# RECEIVER VIEW
-# ==================================================
-if msg_param:
-    apply_style()
+anonymous_mode = st.toggle("Anonymous Crush Mode 🕶️", value=True)
 
-    message_text = decode_data(msg_param)
-    sender_name = decode_data(from_param) if from_param else "Secret Admirer 💘"
+message = st.text_area(
+    "💌 Write your message",
+    placeholder="Someone secretly likes you...",
+    max_chars=300
+)
 
-    st.markdown(f"""
-        <div class="card">
-            <h1>💌</h1>
-            <div class="message">"{message_text}"</div>
-            <div class="from">— {sender_name}</div>
-        </div>
-    """, unsafe_allow_html=True)
+if st.button("💘 Generate Surprise"):
+    if not message.strip():
+        st.warning("Please write a message")
+        st.stop()
 
-    col1, col2 = st.columns(2)
+    base_url = get_public_base_url()
 
-    with col1:
-        if st.button("YES ❤️", type="primary", use_container_width=True):
-            st.balloons()
-            st.success("They said YES 💖")
-            time.sleep(1)
-            st.snow()
+    token = secrets.token_urlsafe(8)
 
-    with col2:
-        if st.button("No 💔", use_container_width=True):
-            st.error("Wrong choice 😜 Try again!")
+    encoded_msg = base64.urlsafe_b64encode(message.encode()).decode()
 
-    st.divider()
+    share_link = f"{base_url}/?c={token}&m={encoded_msg}"
 
-    if st.button("↺ Create your own surprise"):
-        st.query_params.clear()
-        st.rerun()
+    st.success("🎉 Your surprise link is ready!")
 
-# ==================================================
-# CREATOR VIEW
-# ==================================================
-else:
-    st.title("🏹 Cupid’s Surprise Generator")
+    st.code(share_link, language="text")
 
-    message = st.text_area(
-        "Your Message 💕",
-        placeholder="Will you be my Valentine?",
-        height=120
-    )
+    qr_bytes = generate_qr(share_link)
+    st.image(qr_bytes, caption="📱 Scan to open", width=220)
 
-    anonymous = st.toggle("Anonymous Crush Mode 💭", value=False)
+    st.info("🔒 Identity remains hidden. Message only!")
 
-    sender_name = ""
-    if not anonymous:
-        sender_name = st.text_input("Your Name (optional)")
+# ---------------- MESSAGE VIEW MODE ----------------
+query = st.query_params
 
-    if st.button("Generate Surprise 💘", type="primary"):
-        if not message.strip():
-            st.warning("Please enter a message.")
-        else:
-            base_url = get_public_base_url()
-
-            enc_msg = encode_data(message.strip())
-            final_link = f"{base_url}?msg={enc_msg}"
-
-            if not anonymous and sender_name.strip():
-                enc_sender = encode_data(sender_name.strip())
-                final_link += f"&from={enc_sender}"
-
-            st.success("💖 Your surprise is ready!")
-
-            st.code(final_link, language="text")
-
-            qr_img = generate_qr(final_link)
-            st.image(qr_img, caption="📱 Scan to open the surprise")
-
-            st.info("Share the link or QR code with your crush 💌")
+if "m" in query:
+    try:
+        decoded = base64.urlsafe_b64decode(query["m"]).decode()
+        st.divider()
+        st.subheader("💖 You received a secret message")
+        st.success(decoded)
+        st.caption("Someone has a crush on you 😉")
+    except Exception:
+        st.error("Invalid or broken link")
