@@ -9,17 +9,21 @@ from firebase_admin import credentials, firestore
 
 # ---------------- 1. PAGE CONFIG ----------------
 st.set_page_config(
-    page_title="Cupid's Surprise 💘",
+    page_title="Cupid's Secret",
     page_icon="🐎",
     layout="centered"
 )
 
 # ---------------- 2. FIREBASE SETUP ----------------
+# Checks for existing app to prevent connection errors on reload
 if not firebase_admin._apps:
+    # Try loading from Streamlit Cloud Secrets (Deployment)
     if "firebase" in st.secrets:
         key_dict = dict(st.secrets["firebase"])
         cred = credentials.Certificate(key_dict)
         firebase_admin.initialize_app(cred)
+    
+    # Fallback to local file (Local Testing)
     else:
         try:
             cred = credentials.Certificate("firebase_key.json")
@@ -31,103 +35,94 @@ if not firebase_admin._apps:
 db = firestore.client()
 
 # ---------------- 3. CLASSICAL B&W STYLING ----------------
-# IMPORTANT: Replace the 'background-image' URL below with the exact image your user wants.
-# I have used a high-quality placeholder from Unsplash that matches the description.
-
 st.markdown("""
 <style>
-/* Import Classical Fonts */
+/* 1. Import Classical Fonts (Cinzel for titles, Lato for text) */
 @import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Lato:wght@300;400&display=swap');
 
-/* THE BACKGROUND IMAGE */
+/* 2. THE BACKGROUND (Running Horses in B&W) */
 .stApp {
-    /* REPLACE THIS URL for a different image */
-    background-image: url('https://images.unsplash.com/photo-1546445317-29f4545e9d53?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D');
+    background-image: url('https://images.unsplash.com/photo-1506504287829-9c5952c4aa37?q=80&w=2070&auto=format&fit=crop');
     background-size: cover;
     background-attachment: fixed;
     background-position: center center;
 }
 
-/* Transparent "Glass" Card Style */
+/* 3. GLASSMORPHISM CARD (Transparent Dark Glass) */
 div.card {
-    background-color: rgba(0, 0, 0, 0.6); /* Dark semi-transparent */
-    backdrop-filter: blur(10px); /* The frosted glass effect */
-    -webkit-backdrop-filter: blur(10px); /* Safari support */
+    background-color: rgba(0, 0, 0, 0.65); /* Dark see-through */
+    backdrop-filter: blur(12px); /* Blur effect */
+    -webkit-backdrop-filter: blur(12px);
     padding: 40px;
     border-radius: 15px;
     text-align: center;
-    box-shadow: 0px 10px 30px rgba(0, 0, 0, 0.5);
-    border: 1px solid rgba(255, 255, 255, 0.2); /* Subtle white border */
+    box-shadow: 0px 10px 40px rgba(0, 0, 0, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.15); /* Subtle border */
     margin-top: 20px;
     margin-bottom: 20px;
     color: #ffffff !important;
 }
 
-/* Typography */
+/* 4. TYPOGRAPHY */
 h1 {
     font-family: 'Cinzel Decorative', cursive;
     color: #ffffff !important;
-    text-shadow: 2px 2px 8px rgba(0,0,0,0.8); /* Shadow makes text pop on busy backgrounds */
-    font-size: 3rem !important;
+    text-shadow: 0px 4px 10px rgba(0,0,0,0.9);
+    font-size: 3.5rem !important;
     text-align: center;
     font-weight: 700 !important;
 }
 
-h2, h3, p, label, .stMarkdown {
+h2, h3, p, label, .stMarkdown, .stCheckbox {
     font-family: 'Lato', sans-serif;
     color: #ffffff !important;
+    text-shadow: 0px 2px 4px rgba(0,0,0,0.8);
 }
 
-/* Message Text Styling */
-div.message-text {
-    font-family: 'Cinzel Decorative', cursive;
-    font-size: 26px;
-    color: #ffffff;
-    line-height: 1.5;
-    padding: 20px;
-    border-top: 1px solid rgba(255,255,255,0.3);
-    border-bottom: 1px solid rgba(255,255,255,0.3);
-}
-
-/* Input Fields Styling - Transparent */
+/* 5. INPUT FIELDS (Transparent) */
 .stTextArea textarea, .stSelectbox > div > div, .stTextInput > div > div {
-    background-color: rgba(255, 255, 255, 0.15) !important; /* Very see-through */
-    border-radius: 10px !important;
-    border: 1px solid rgba(255, 255, 255, 0.4) !important;
-    color: #ffffff !important; /* White typing text */
+    background-color: rgba(20, 20, 20, 0.6) !important;
+    border-radius: 8px !important;
+    border: 1px solid rgba(255, 255, 255, 0.3) !important;
+    color: #ffffff !important;
     font-family: 'Lato', sans-serif !important;
 }
-/* Placeholder text color */
+/* Dropdown menu items */
+ul[data-testid="stSelectboxVirtualDropdown"] {
+    background-color: #2b2b2b !important;
+}
+
+/* Placeholder Color */
 ::placeholder { 
-  color: rgba(255, 255, 255, 0.7) !important;
-  opacity: 1; 
+  color: rgba(255, 255, 255, 0.6) !important;
 }
 
-/* Checkbox styling */
-.stCheckbox label span {
-    color: white !important;
-}
-
-/* Button Styling - Classical Monochrome */
+/* 6. BUTTON STYLING (Classical Metallic) */
 div.stButton > button {
-    background: linear-gradient(45deg, #2c3e50, #bdc3c7);
-    color: white;
+    background: linear-gradient(180deg, #4b4b4b, #1e1e1e);
+    color: #e0e0e0;
     border-radius: 30px;
-    border: 1px solid rgba(255,255,255,0.5);
+    border: 1px solid rgba(255,255,255,0.2);
     padding: 15px 30px;
     font-size: 18px;
     font-family: 'Cinzel Decorative', cursive;
     box-shadow: 0px 5px 15px rgba(0, 0, 0, 0.5);
-    transition: transform 0.2s;
+    transition: all 0.3s ease;
     width: 100%;
+    text-transform: uppercase;
+    letter-spacing: 2px;
 }
 div.stButton > button:hover {
     transform: scale(1.02);
-    background: linear-gradient(45deg, #bdc3c7, #2c3e50);
-    box-shadow: 0px 8px 20px rgba(255, 255, 255, 0.2);
+    background: linear-gradient(180deg, #5e5e5e, #333333);
+    border-color: #ffffff;
+    color: #ffffff;
+    box-shadow: 0px 0px 20px rgba(255, 255, 255, 0.2);
 }
-/* Remove default streamlit header */
+
+/* Hide Streamlit Header/Footer */
 header {visibility: hidden;}
+footer {visibility: hidden;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -158,53 +153,62 @@ if "id" in query:
     doc_ref = db.collection("links").document(link_id)
     doc = doc_ref.get()
 
-    # Keep the card wrapper for readability against the busy background
+    # Glass Card Wrapper for Receiver
     st.markdown("<div class='card'>", unsafe_allow_html=True)
 
     if not doc.exists:
-        st.error("❌ Link not found")
+        st.error("❌ The wind has blown this message away. (Invalid Link)")
     else:
         data = doc.to_dict()
         now_ts = int(time.time())
         is_one_time = data.get("one_time", True)
 
+        # 1. Check Expiry
         if now_ts > data.get("expiry", 0):
-            st.subheader("⏳ Too Late.")
-            st.warning("This message has faded away.")
+            st.title("⏳")
+            st.subheader("Lost to Time")
+            st.warning("This message has expired.")
 
+        # 2. Check Opened (If One-Time is active)
         elif is_one_time and data.get("opened", False) and not st.session_state.revealed:
-            st.subheader("💔 Already Viewed")
-            st.warning("This secret has already been revealed once.")
+            st.title("💔")
+            st.subheader("Already Revealed")
+            st.warning("This secret has vanished after being seen.")
 
+        # 3. Ready to Reveal
         elif not st.session_state.revealed:
-            st.title("A Secret Awaits")
+            st.title("✉️")
+            st.subheader("A Secret Awaits You")
+            
             if is_one_time:
-                st.caption("⚠️ This message will vanish after a single viewing.")
+                st.caption("⚠️ Warning: This message will vanish forever after you read it.")
             else:
-                st.caption("✨ Viewable until the sands of time run out.")
+                st.caption("✨ You may view this message until the time expires.")
+            
             st.markdown("<br>", unsafe_allow_html=True)
             
-            if st.button("Reveal the Secret ✨"):
+            if st.button("Break the Seal"):
                 doc_ref.update({"opened": True})
                 st.session_state.revealed = True
                 st.rerun()
 
+        # 4. Show Message
         else:
             st.balloons()
-            # Using markdown for white text instead of st.title which can be stubborn
-            st.markdown("# 🖤")
-            st.markdown(f"<div class='message-text'>“{data['message']}”</div>", unsafe_allow_html=True)
-            st.markdown("<br>— Anonymous", unsafe_allow_html=True)
+            # We use HTML directly for better font control
+            st.markdown(f"<h2 style='font-family: Cinzel Decorative; font-size: 32px; color: white;'>“{data['message']}”</h2>", unsafe_allow_html=True)
+            st.markdown("<p style='opacity: 0.8;'>— Anonymous</p>", unsafe_allow_html=True)
+            
             st.divider()
             
             if is_one_time:
-                st.success("This secret is now locked in time forever.")
+                st.success("This secret is now locked in the past.")
             else:
-                st.success("You may return to this message until it expires.")
+                st.success("You can return to this memory until it expires.")
 
     st.markdown("</div>", unsafe_allow_html=True)
     
-    if st.button("Compose your own? ✉️"):
+    if st.button("Compose Your Own"):
         st.query_params.clear()
         st.rerun()
 
@@ -213,25 +217,28 @@ if "id" in query:
 
 # === CREATOR VIEW (Creating a Message) ===
 st.title("Cupid's Secret")
-st.markdown("<h3 style='text-align: center; color: white;'>Compose a classical message</h3>", unsafe_allow_html=True)
+st.markdown("<h3 style='text-align: center; color: rgba(255,255,255,0.8); font-size: 1.2rem;'>Compose a timeless message</h3>", unsafe_allow_html=True)
 
-# Removed inner card wrapper so inputs sit directly on the background (but they have their own transparent style now)
+# NO CARD WRAPPER HERE - Inputs sit directly on background (styled transparently via CSS)
 with st.container():
     
-    message = st.text_area("Your Message", placeholder="Type your secret confession here...", max_chars=300)
+    st.markdown("<br>", unsafe_allow_html=True)
+    message = st.text_area("Your Confession", placeholder="Write your secret here...", max_chars=300)
     
     col1, col2 = st.columns(2)
     with col1:
-        expiry_minutes = st.selectbox("⏱ Duration", [15, 30, 60, 1440], format_func=lambda x: f"{x} mins" if x < 60 else "24 hours")
+        expiry_minutes = st.selectbox("Duration", [15, 30, 60, 1440], format_func=lambda x: f"{x} Minutes" if x < 60 else "24 Hours")
     with col2:
         st.write("") 
         st.write("")
-        # Using HTML to ensure checkbox label is white
+        # Checkbox for Vanishing Mode
         is_one_time = st.checkbox("Vanish after one view?", value=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
 
     if st.button("Seal & Generate Link 📜"):
         if not message.strip():
-            st.error("Please write a message before sealing.")
+            st.error("The parchment cannot be empty.")
         else:
             link_id = secrets.token_urlsafe(8)
             expiry_ts = int((datetime.now() + timedelta(minutes=expiry_minutes)).timestamp())
@@ -245,17 +252,18 @@ with st.container():
             }
             
             try:
-                with st.spinner("Encrypting your secret..."):
+                with st.spinner("Sealing your secret..."):
                     db.collection("links").document(link_id).set(doc_data)
-                    time.sleep(1)
+                    time.sleep(0.5)
                 
                 base_url = get_public_base_url()
                 share_link = f"{base_url}/?id={link_id}"
                 
-                # Show Result in a transparent glass Card
+                # Show Result in a Glass Card for contrast
                 st.markdown("<div class='card'>", unsafe_allow_html=True)
                 st.success("✨ Your message has been sealed.")
                 st.code(share_link)
+                
                 qr_img = generate_qr(share_link)
                 st.image(qr_img, width=200, caption="Scan to Reveal")
                 st.markdown("</div>", unsafe_allow_html=True)
