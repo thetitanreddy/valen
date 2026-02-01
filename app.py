@@ -33,7 +33,12 @@ def generate_qr(link):
     return buf.getvalue()
 
 def get_base_url():
-    return st.request.url.split("?")[0].rstrip("/")
+    try:
+        proto = st.request.headers.get("x-forwarded-proto", "http")
+        host = st.request.headers.get("host")
+        return f"{proto}://{host}"
+    except:
+        return "http://localhost:8501"
 
 # --- STYLES ---
 def apply_style():
