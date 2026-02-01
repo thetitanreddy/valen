@@ -3,14 +3,16 @@ import qrcode
 import io
 import secrets
 import time
+import base64
 from datetime import datetime, timedelta
+from PIL import Image
 import firebase_admin
 from firebase_admin import credentials, firestore
 
 # ---------------- 1. PAGE CONFIG ----------------
 st.set_page_config(
     page_title="Cupid's Secret",
-    page_icon="🖤",
+    page_icon="🐎",
     layout="centered"
 )
 
@@ -33,16 +35,13 @@ db = firestore.client()
 # ---------------- 3. CLEAN MATTE BLACK STYLING ----------------
 st.markdown("""
 <style>
-/* 1. Import Classical Fonts */
 @import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Lato:wght@300;400&display=swap');
 
-/* 2. THE BACKGROUND - Solid Matte Black */
 .stApp {
     background-color: #121212 !important;
     background-image: none !important;
 }
 
-/* 3. TYPOGRAPHY */
 h1 {
     font-family: 'Cinzel Decorative', cursive;
     color: #ffffff !important;
@@ -57,7 +56,6 @@ h2, h3, p, label, .stMarkdown, .stCheckbox, .stCaption {
     color: #e0e0e0 !important;
 }
 
-/* Message Text Styling */
 .message-content {
     font-family: 'Cinzel Decorative', cursive;
     font-size: 32px;
@@ -66,26 +64,27 @@ h2, h3, p, label, .stMarkdown, .stCheckbox, .stCaption {
     margin: 40px 0;
 }
 
-/* 4. INPUT FIELDS (Subtle Charcoal) */
-.stTextArea textarea, .stSelectbox > div > div, .stTextInput > div > div {
-    background-color: #2b2b2b !important; /* Dark Charcoal */
+.stTextArea textarea, .stSelectbox > div > div, .stTextInput > div > div, .stNumberInput > div > div > input {
+    background-color: #2b2b2b !important;
     border-radius: 8px !important;
     border: 1px solid #404040 !important;
     color: #ffffff !important;
     font-family: 'Lato', sans-serif !important;
 }
-/* Dropdown menu items */
 ul[data-testid="stSelectboxVirtualDropdown"] {
     background-color: #2b2b2b !important;
     color: white !important;
 }
+::placeholder { color: #888888 !important; }
 
-/* Placeholder Color */
-::placeholder { 
-  color: #888888 !important;
+/* File Uploader Style */
+div[data-testid="stFileUploader"] {
+    background-color: #2b2b2b;
+    border-radius: 10px;
+    padding: 20px;
+    border: 1px dashed #404040;
 }
 
-/* 5. BUTTON STYLING (Classical Metallic) */
 div.stButton > button {
     background: linear-gradient(180deg, #4b4b4b, #1e1e1e);
     color: #e0e0e0;
@@ -109,7 +108,6 @@ div.stButton > button:hover {
     box-shadow: 0px 0px 20px rgba(255, 255, 255, 0.2);
 }
 
-/* Hide Streamlit Header/Footer */
 header {visibility: hidden;}
 footer {visibility: hidden;}
 </style>
@@ -128,6 +126,31 @@ def generate_qr(data):
     buf = io.BytesIO()
     qr.save(buf, format="PNG")
     return buf.getvalue()
+
+def process_image(uploaded_file):
+    """Compresses image and converts to Base64 string"""
+    try:
+        image = Image.open(uploaded_file)
+        if image.mode in ("RGBA", "P"):
+            image = image.convert("RGB")
+        
+        max_width = 800
+        if image.width > max_width:
+            ratio = max_width / float(image.width)
+            new_height = int((float(image.height) * float(ratio)))
+            image = image.resize((max_width, new_height), Image.Resampling.LANCZOS)
+        
+        img_byte_arr = io.BytesIO()
+        image.save(img_byte_arr, format='JPEG', quality=70, optimize=True)
+        img_byte_arr = img_byte_arr.getvalue()
+        
+        if len(img_byte_arr) > 950000:
+            return None
+            
+        return base64.b64encode(img_byte_arr).decode('utf-8')
+    except Exception as e:
+        print(f"Error processing image: {e}")
+        return None
 
 # ---------------- 5. APP LOGIC ----------------
 query = st.query_params
@@ -149,19 +172,16 @@ if "id" in query:
         now_ts = int(time.time())
         is_one_time = data.get("one_time", True)
 
-        # 1. Check Expiry
         if now_ts > data.get("expiry", 0):
             st.title("⏳")
             st.subheader("Lost to Time")
             st.warning("This message has expired.")
 
-        # 2. Check Opened (If One-Time is active)
         elif is_one_time and data.get("opened", False) and not st.session_state.revealed:
             st.title("💔")
             st.subheader("Already Revealed")
             st.warning("This secret has vanished after being seen.")
 
-        # 3. Ready to Reveal
         elif not st.session_state.revealed:
             st.title("✉️")
             st.subheader("A Secret Awaits You")
@@ -178,9 +198,16 @@ if "id" in query:
                 st.session_state.revealed = True
                 st.rerun()
 
-        # 4. Show Message
         else:
             st.balloons()
+            
+            if data.get("image_data"):
+                try:
+                    image_bytes = base64.b64decode(data["image_data"])
+                    st.image(image_bytes, use_container_width=True)
+                except:
+                    st.error("Image corrupted.")
+
             st.markdown(f"<div class='message-content'>“{data['message']}”</div>", unsafe_allow_html=True)
             st.markdown("<p style='text-align: center; opacity: 0.8;'>— Anonymous</p>", unsafe_allow_html=True)
             
@@ -206,68 +233,60 @@ st.markdown("<h3 style='text-align: center; color: rgba(255,255,255,0.8); font-s
 st.markdown("<br>", unsafe_allow_html=True)
 message = st.text_area("Your Confession", placeholder="Write your secret here...", max_chars=300)
 
+# --- IMAGE UPLOADER IS HERE ---
+uploaded_file = st.file_uploader("Attach a Photo (Optional)", type=['png', 'jpg', 'jpeg'])
+# ------------------------------
+
 col1, col2 = st.columns(2)
 with col1:
-    # UPDATED DURATION OPTIONS
     duration_options = ["15 Mins", "30 Mins", "1 Hr", "24 Hr", "Custom"]
     duration_choice = st.selectbox("Duration", duration_options)
     
-    expiry_minutes = 15  # Default
-    
+    expiry_minutes = 15
     if duration_choice == "Custom":
-        # Two columns for input + unit
         c_val, c_unit = st.columns([1, 1])
         with c_val:
-            # TEXT INPUT -> No buttons. Just type.
             custom_val_str = st.text_input("Value", value="1", label_visibility="collapsed")
-            
-            # Safe conversion to int
-            if custom_val_str.isdigit():
-                custom_val = int(custom_val_str)
-            else:
-                custom_val = 1 # Default if invalid
-                
+            if custom_val_str.isdigit(): custom_val = int(custom_val_str)
+            else: custom_val = 1
         with c_unit:
             custom_unit = st.selectbox("Unit", ["Minutes", "Hours", "Days", "Months"], label_visibility="collapsed")
-            
-        # Math Conversion
-        if custom_unit == "Minutes":
-            expiry_minutes = custom_val
-        elif custom_unit == "Hours":
-            expiry_minutes = custom_val * 60
-        elif custom_unit == "Days":
-            expiry_minutes = custom_val * 1440
-        elif custom_unit == "Months":
-            expiry_minutes = custom_val * 43200 
-            
-    elif duration_choice == "15 Mins":
-        expiry_minutes = 15
-    elif duration_choice == "30 Mins":
-        expiry_minutes = 30
-    elif duration_choice == "1 Hr":
-        expiry_minutes = 60
-    elif duration_choice == "24 Hr":
-        expiry_minutes = 1440
+        if custom_unit == "Minutes": expiry_minutes = custom_val
+        elif custom_unit == "Hours": expiry_minutes = custom_val * 60
+        elif custom_unit == "Days": expiry_minutes = custom_val * 1440
+        elif custom_unit == "Months": expiry_minutes = custom_val * 43200 
+    elif duration_choice == "15 Mins": expiry_minutes = 15
+    elif duration_choice == "30 Mins": expiry_minutes = 30
+    elif duration_choice == "1 Hr": expiry_minutes = 60
+    elif duration_choice == "24 Hr": expiry_minutes = 1440
 
 with col2:
     st.write("") 
     st.write("")
-    if duration_choice == "Custom":
-        st.write("") 
-    
+    if duration_choice == "Custom": st.write("")
     is_one_time = st.checkbox("Vanish after one view?", value=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
 if st.button("Seal & Generate Link 📜"):
-    if not message.strip():
-        st.error("The parchment cannot be empty.")
+    if not message.strip() and not uploaded_file:
+        st.error("The parchment cannot be empty (add text or image).")
     else:
+        # PROCESSING
+        image_str = None
+        if uploaded_file:
+            with st.spinner("Compressing & Sealing Image..."):
+                image_str = process_image(uploaded_file)
+                if image_str is None:
+                    st.error("Image is too large! Please try a smaller photo.")
+                    st.stop()
+
         link_id = secrets.token_urlsafe(8)
         expiry_ts = int((datetime.now() + timedelta(minutes=expiry_minutes)).timestamp())
         
         doc_data = {
             "message": message,
+            "image_data": image_str,
             "created_at": int(time.time()),
             "expiry": expiry_ts,
             "opened": False,
