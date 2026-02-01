@@ -12,7 +12,7 @@ from firebase_admin import credentials, firestore
 # ---------------- 1. PAGE CONFIG ----------------
 st.set_page_config(
     page_title="Cupid's Secret",
-    page_icon="🐎",
+    page_icon="🖤",
     layout="centered"
 )
 
