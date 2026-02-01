@@ -10,7 +10,7 @@ from firebase_admin import credentials, firestore
 # ---------------- 1. PAGE CONFIG ----------------
 st.set_page_config(
     page_title="Cupid's Secret",
-    page_icon="🐎",
+    page_icon="🖤",
     layout="centered"
 )
 
@@ -67,7 +67,7 @@ h2, h3, p, label, .stMarkdown, .stCheckbox, .stCaption {
 }
 
 /* 4. INPUT FIELDS (Subtle Charcoal) */
-.stTextArea textarea, .stSelectbox > div > div, .stTextInput > div > div, .stNumberInput > div > div > input {
+.stTextArea textarea, .stSelectbox > div > div, .stTextInput > div > div {
     background-color: #2b2b2b !important; /* Dark Charcoal */
     border-radius: 8px !important;
     border: 1px solid #404040 !important;
@@ -212,11 +212,34 @@ with col1:
     duration_options = ["15 Mins", "30 Mins", "1 Hr", "24 Hr", "Custom"]
     duration_choice = st.selectbox("Duration", duration_options)
     
-    # Logic to handle the choice
     expiry_minutes = 15  # Default
     
     if duration_choice == "Custom":
-        expiry_minutes = st.number_input("Minutes", min_value=1, max_value=10080, value=60)
+        # Two columns for input + unit
+        c_val, c_unit = st.columns([1, 1])
+        with c_val:
+            # TEXT INPUT -> No buttons. Just type.
+            custom_val_str = st.text_input("Value", value="1", label_visibility="collapsed")
+            
+            # Safe conversion to int
+            if custom_val_str.isdigit():
+                custom_val = int(custom_val_str)
+            else:
+                custom_val = 1 # Default if invalid
+                
+        with c_unit:
+            custom_unit = st.selectbox("Unit", ["Minutes", "Hours", "Days", "Months"], label_visibility="collapsed")
+            
+        # Math Conversion
+        if custom_unit == "Minutes":
+            expiry_minutes = custom_val
+        elif custom_unit == "Hours":
+            expiry_minutes = custom_val * 60
+        elif custom_unit == "Days":
+            expiry_minutes = custom_val * 1440
+        elif custom_unit == "Months":
+            expiry_minutes = custom_val * 43200 
+            
     elif duration_choice == "15 Mins":
         expiry_minutes = 15
     elif duration_choice == "30 Mins":
@@ -229,10 +252,8 @@ with col1:
 with col2:
     st.write("") 
     st.write("")
-    # Adjust spacing if "Custom" box appears so checkbox aligns well
     if duration_choice == "Custom":
         st.write("") 
-        st.write("")
     
     is_one_time = st.checkbox("Vanish after one view?", value=True)
 
