@@ -10,7 +10,7 @@ from firebase_admin import credentials, firestore
 # ---------------- 1. PAGE CONFIG ----------------
 st.set_page_config(
     page_title="Cupid's Surprise 💘",
-    page_icon="💌",
+    page_icon="🐎",
     layout="centered"
 )
 
@@ -30,73 +30,104 @@ if not firebase_admin._apps:
 
 db = firestore.client()
 
-# ---------------- 3. DELUXE STYLING ----------------
+# ---------------- 3. CLASSICAL B&W STYLING ----------------
+# IMPORTANT: Replace the 'background-image' URL below with the exact image your user wants.
+# I have used a high-quality placeholder from Unsplash that matches the description.
+
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Pacifico&family=Quicksand:wght@400;600&display=swap');
+/* Import Classical Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Lato:wght@300;400&display=swap');
 
+/* THE BACKGROUND IMAGE */
 .stApp {
-    background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 99%, #fecfef 100%);
+    /* REPLACE THIS URL for a different image */
+    background-image: url('https://images.unsplash.com/photo-1546445317-29f4545e9d53?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D');
+    background-size: cover;
     background-attachment: fixed;
+    background-position: center center;
 }
 
+/* Transparent "Glass" Card Style */
 div.card {
-    background-color: rgba(255, 255, 255, 0.95);
+    background-color: rgba(0, 0, 0, 0.6); /* Dark semi-transparent */
+    backdrop-filter: blur(10px); /* The frosted glass effect */
+    -webkit-backdrop-filter: blur(10px); /* Safari support */
     padding: 40px;
-    border-radius: 25px;
+    border-radius: 15px;
     text-align: center;
-    box-shadow: 0px 15px 35px rgba(255, 65, 108, 0.2);
-    border: 2px solid #fff;
+    box-shadow: 0px 10px 30px rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.2); /* Subtle white border */
     margin-top: 20px;
     margin-bottom: 20px;
+    color: #ffffff !important;
 }
 
+/* Typography */
 h1 {
-    font-family: 'Pacifico', cursive;
-    color: #ff4757 !important;
-    text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
-    font-size: 3.5rem !important;
+    font-family: 'Cinzel Decorative', cursive;
+    color: #ffffff !important;
+    text-shadow: 2px 2px 8px rgba(0,0,0,0.8); /* Shadow makes text pop on busy backgrounds */
+    font-size: 3rem !important;
     text-align: center;
+    font-weight: 700 !important;
 }
 
-div.card h2 {
-    font-family: 'Quicksand', sans-serif;
-    color: #2f3542 !important;
-    font-weight: 600;
+h2, h3, p, label, .stMarkdown {
+    font-family: 'Lato', sans-serif;
+    color: #ffffff !important;
 }
 
+/* Message Text Styling */
 div.message-text {
-    font-family: 'Pacifico', cursive;
-    font-size: 28px;
-    color: #ff4757;
-    line-height: 1.6;
+    font-family: 'Cinzel Decorative', cursive;
+    font-size: 26px;
+    color: #ffffff;
+    line-height: 1.5;
     padding: 20px;
+    border-top: 1px solid rgba(255,255,255,0.3);
+    border-bottom: 1px solid rgba(255,255,255,0.3);
 }
 
-div.expiry-text {
-    font-family: 'Quicksand', sans-serif;
-    color: #a4b0be;
-    font-size: 14px;
-    margin-top: 20px;
+/* Input Fields Styling - Transparent */
+.stTextArea textarea, .stSelectbox > div > div, .stTextInput > div > div {
+    background-color: rgba(255, 255, 255, 0.15) !important; /* Very see-through */
+    border-radius: 10px !important;
+    border: 1px solid rgba(255, 255, 255, 0.4) !important;
+    color: #ffffff !important; /* White typing text */
+    font-family: 'Lato', sans-serif !important;
+}
+/* Placeholder text color */
+::placeholder { 
+  color: rgba(255, 255, 255, 0.7) !important;
+  opacity: 1; 
 }
 
-/* Button Styling */
+/* Checkbox styling */
+.stCheckbox label span {
+    color: white !important;
+}
+
+/* Button Styling - Classical Monochrome */
 div.stButton > button {
-    background: linear-gradient(45deg, #ff6b6b, #ff4757);
+    background: linear-gradient(45deg, #2c3e50, #bdc3c7);
     color: white;
     border-radius: 30px;
-    border: none;
+    border: 1px solid rgba(255,255,255,0.5);
     padding: 15px 30px;
     font-size: 18px;
-    font-weight: bold;
-    box-shadow: 0px 5px 15px rgba(255, 71, 87, 0.4);
+    font-family: 'Cinzel Decorative', cursive;
+    box-shadow: 0px 5px 15px rgba(0, 0, 0, 0.5);
     transition: transform 0.2s;
     width: 100%;
 }
 div.stButton > button:hover {
-    transform: scale(1.05);
-    box-shadow: 0px 8px 20px rgba(255, 71, 87, 0.6);
+    transform: scale(1.02);
+    background: linear-gradient(45deg, #bdc3c7, #2c3e50);
+    box-shadow: 0px 8px 20px rgba(255, 255, 255, 0.2);
 }
+/* Remove default streamlit header */
+header {visibility: hidden;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -127,6 +158,7 @@ if "id" in query:
     doc_ref = db.collection("links").document(link_id)
     doc = doc_ref.get()
 
+    # Keep the card wrapper for readability against the busy background
     st.markdown("<div class='card'>", unsafe_allow_html=True)
 
     if not doc.exists:
@@ -134,59 +166,45 @@ if "id" in query:
     else:
         data = doc.to_dict()
         now_ts = int(time.time())
-        
-        # Get settings (default to True for old links for safety)
         is_one_time = data.get("one_time", True)
 
-        # 1. EXPIRED CHECK (Always applies)
         if now_ts > data.get("expiry", 0):
-            st.title("⏳")
-            st.subheader("Too Late!")
-            st.warning("This message has expired.")
+            st.subheader("⏳ Too Late.")
+            st.warning("This message has faded away.")
 
-        # 2. ALREADY OPENED CHECK (Only if one-time view is enabled)
         elif is_one_time and data.get("opened", False) and not st.session_state.revealed:
-            st.title("💔")
-            st.subheader("Already Opened")
-            st.warning("This secret message has self-destructed.")
+            st.subheader("💔 Already Viewed")
+            st.warning("This secret has already been revealed once.")
 
-        # 3. READY TO OPEN (The Envelope State)
         elif not st.session_state.revealed:
-            st.title("💌")
-            st.subheader("You have a secret message!")
-            
+            st.title("A Secret Awaits")
             if is_one_time:
-                st.caption("⚠️ Warning: You can only view this ONCE.")
+                st.caption("⚠️ This message will vanish after a single viewing.")
             else:
-                st.caption("✨ You can view this until the timer expires.")
-                
+                st.caption("✨ Viewable until the sands of time run out.")
             st.markdown("<br>", unsafe_allow_html=True)
             
-            if st.button("Tap to Open Envelope ✨"):
-                # Always mark as opened in DB so we know it was seen
+            if st.button("Reveal the Secret ✨"):
                 doc_ref.update({"opened": True})
                 st.session_state.revealed = True
                 st.rerun()
 
-        # 4. REVEALED MESSAGE
         else:
             st.balloons()
-            st.title("💖")
+            # Using markdown for white text instead of st.title which can be stubborn
+            st.markdown("# 🖤")
             st.markdown(f"<div class='message-text'>“{data['message']}”</div>", unsafe_allow_html=True)
-            st.caption("— Anonymous")
-            
+            st.markdown("<br>— Anonymous", unsafe_allow_html=True)
             st.divider()
-            expiry_date = datetime.fromtimestamp(data["expiry"])
-            st.markdown(f"<div class='expiry-text'>🔒 Valid until: {expiry_date.strftime('%H:%M')}</div>", unsafe_allow_html=True)
             
             if is_one_time:
-                st.success("This link is now locked forever.")
+                st.success("This secret is now locked in time forever.")
             else:
-                st.success("You can refresh and read this again until time runs out.")
+                st.success("You may return to this message until it expires.")
 
     st.markdown("</div>", unsafe_allow_html=True)
     
-    if st.button("Send your own? 💘"):
+    if st.button("Compose your own? ✉️"):
         st.query_params.clear()
         st.rerun()
 
@@ -194,26 +212,26 @@ if "id" in query:
 
 
 # === CREATOR VIEW (Creating a Message) ===
-st.title("Cupid's Surprise")
-st.markdown("### Create a Secret Message")
+st.title("Cupid's Secret")
+st.markdown("<h3 style='text-align: center; color: white;'>Compose a classical message</h3>", unsafe_allow_html=True)
 
+# Removed inner card wrapper so inputs sit directly on the background (but they have their own transparent style now)
 with st.container():
-    st.markdown("<div class='card'>", unsafe_allow_html=True)
     
-    message = st.text_area("💌 Your Secret Message", placeholder="I've had a crush on you for a while...", max_chars=300)
+    message = st.text_area("Your Message", placeholder="Type your secret confession here...", max_chars=300)
     
     col1, col2 = st.columns(2)
     with col1:
-        expiry_minutes = st.selectbox("⏱ Expires in", [15, 30, 60, 1440], format_func=lambda x: f"{x} mins" if x < 60 else "24 hours")
+        expiry_minutes = st.selectbox("⏱ Duration", [15, 30, 60, 1440], format_func=lambda x: f"{x} mins" if x < 60 else "24 hours")
     with col2:
         st.write("") 
         st.write("")
-        # New Checkbox for One-Time View
-        is_one_time = st.checkbox("💣 Self-destruct after viewing?", value=True)
+        # Using HTML to ensure checkbox label is white
+        is_one_time = st.checkbox("Vanish after one view?", value=True)
 
-    if st.button("Generate Link 💘"):
+    if st.button("Seal & Generate Link 📜"):
         if not message.strip():
-            st.error("Please write a message!")
+            st.error("Please write a message before sealing.")
         else:
             link_id = secrets.token_urlsafe(8)
             expiry_ts = int((datetime.now() + timedelta(minutes=expiry_minutes)).timestamp())
@@ -223,7 +241,7 @@ with st.container():
                 "created_at": int(time.time()),
                 "expiry": expiry_ts,
                 "opened": False,
-                "one_time": is_one_time  # Save the preference
+                "one_time": is_one_time
             }
             
             try:
@@ -234,13 +252,13 @@ with st.container():
                 base_url = get_public_base_url()
                 share_link = f"{base_url}/?id={link_id}"
                 
-                st.success("✨ Secret Link Created!")
+                # Show Result in a transparent glass Card
+                st.markdown("<div class='card'>", unsafe_allow_html=True)
+                st.success("✨ Your message has been sealed.")
                 st.code(share_link)
-                
                 qr_img = generate_qr(share_link)
-                st.image(qr_img, width=200, caption="Scan to Open")
+                st.image(qr_img, width=200, caption="Scan to Reveal")
+                st.markdown("</div>", unsafe_allow_html=True)
                 
             except Exception as e:
                 st.error(f"Error: {e}")
-
-    st.markdown("</div>", unsafe_allow_html=True)
