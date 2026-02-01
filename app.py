@@ -1,24 +1,29 @@
 import streamlit as st
 import base64
-import time
+import urllib.parse
 import qrcode
 import io
-import urllib.parse
+import time
+import os
 
-# --- PAGE CONFIG ---
+# -------------------------------------------------
+# PAGE CONFIG
+# -------------------------------------------------
 st.set_page_config(
     page_title="Valentine Surprise 💌",
     page_icon="💘",
     layout="centered"
 )
 
-# --- HELPERS ---
-def encode_data(text):
+# -------------------------------------------------
+# HELPERS
+# -------------------------------------------------
+def encode_data(text: str) -> str:
     return urllib.parse.quote(
         base64.b64encode(text.encode()).decode()
     )
 
-def decode_data(text):
+def decode_data(text: str) -> str:
     try:
         return base64.b64decode(
             urllib.parse.unquote(text).encode()
@@ -26,21 +31,35 @@ def decode_data(text):
     except:
         return "Unknown"
 
-def generate_qr(link):
+def generate_qr(link: str):
     qr = qrcode.make(link)
     buf = io.BytesIO()
     qr.save(buf, format="PNG")
     return buf.getvalue()
 
-def get_base_url():
-    try:
-        proto = st.request.headers.get("x-forwarded-proto", "http")
-        host = st.request.headers.get("host")
-        return f"{proto}://{host}"
-    except:
-        return "http://localhost:8501"
+def get_public_base_url():
+    """
+    HARD RULE:
+    - If NOT deployed → STOP (no localhost allowed)
+    - If deployed → return public Streamlit Cloud URL
+    """
+    if "STREAMLIT_SERVER_PORT" not in os.environ:
+        st.error("🚫 Shareable links are disabled in local mode.")
+        st.info("Deploy this app on Streamlit Cloud to generate public links.")
+        st.stop()
 
-# --- STYLES ---
+    proto = st.request.headers.get("x-forwarded-proto", "https")
+    host = st.request.headers.get("host")
+
+    if not host:
+        st.error("Unable to detect public URL.")
+        st.stop()
+
+    return f"{proto}://{host}"
+
+# -------------------------------------------------
+# STYLES
+# -------------------------------------------------
 def apply_style():
     st.markdown("""
     <style>
@@ -59,26 +78,32 @@ def apply_style():
         color: #d63384;
         font-weight: bold;
         font-family: 'Comic Sans MS', cursive;
+        line-height: 1.6;
     }
     .from {
         margin-top: 20px;
         font-style: italic;
         color: #555;
+        font-size: 18px;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# --- QUERY PARAMS ---
+# -------------------------------------------------
+# QUERY PARAMS
+# -------------------------------------------------
 params = st.query_params
-msg = params.get("msg")
-sender = params.get("from")
+msg_param = params.get("msg")
+from_param = params.get("from")
 
-# ================= RECEIVER VIEW =================
-if msg:
+# =================================================
+# RECEIVER VIEW
+# =================================================
+if msg_param:
     apply_style()
 
-    message_text = decode_data(msg)
-    sender_name = decode_data(sender) if sender else "Secret Admirer 💘"
+    message_text = decode_data(msg_param)
+    sender_name = decode_data(from_param) if from_param else "Secret Admirer 💘"
 
     st.markdown(f"""
         <div class="card">
@@ -102,11 +127,14 @@ if msg:
             st.error("Wrong choice 😜 Try again")
 
     st.divider()
+
     if st.button("↺ Create your own surprise"):
         st.query_params.clear()
         st.rerun()
 
-# ================= CREATOR VIEW =================
+# =================================================
+# CREATOR VIEW
+# =================================================
 else:
     st.title("🏹 Cupid’s Surprise Generator")
 
@@ -120,15 +148,15 @@ else:
 
     sender_name = ""
     if not anonymous:
-        sender_name = st.text_input("Your Name (Optional)")
+        sender_name = st.text_input("Your Name (optional)")
 
-    if st.button("Generate Surprise Link 💘", type="primary"):
+    if st.button("Generate Surprise 💘", type="primary"):
         if not message:
-            st.warning("Please write a message!")
+            st.warning("Please write a message first!")
         else:
-            enc_msg = encode_data(message)
-            base_url = get_base_url()
+            base_url = get_public_base_url()
 
+            enc_msg = encode_data(message)
             final_link = f"{base_url}?msg={enc_msg}"
 
             if not anonymous and sender_name:
@@ -137,10 +165,8 @@ else:
 
             st.success("💖 Your surprise is ready!")
 
-            # --- SHOW LINK ---
             st.code(final_link, language="text")
 
-            # --- QR CODE ---
             qr_img = generate_qr(final_link)
             st.image(qr_img, caption="📱 Scan to open the surprise")
 
