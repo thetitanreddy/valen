@@ -15,82 +15,101 @@ st.set_page_config(
 )
 
 # ---------------- 2. FIREBASE SETUP ----------------
-# We check if Firebase is already initialized to prevent errors on Streamlit re-runs
 if not firebase_admin._apps:
-    # Try loading from Streamlit Cloud Secrets first (Best for deployment)
     if "firebase" in st.secrets:
         key_dict = dict(st.secrets["firebase"])
         cred = credentials.Certificate(key_dict)
         firebase_admin.initialize_app(cred)
-    
-    # Fallback to local file (Best for local testing)
     else:
         try:
             cred = credentials.Certificate("firebase_key.json")
             firebase_admin.initialize_app(cred)
-        except Exception as e:
-            st.error(f"🔥 Firebase setup failed: {e}")
-            st.info("Make sure 'firebase_key.json' is in the folder OR secrets are set in Streamlit Cloud.")
+        except:
+            st.error("🔥 Firebase setup failed. Check secrets or key file.")
             st.stop()
 
 db = firestore.client()
 
-# ---------------- 3. THEME & UI FIXES ----------------
-# We store the toggle state in session_state so it doesn't reset on every click
-if "theme_toggle" not in st.session_state:
-    st.session_state.theme_toggle = False
+# ---------------- 3. DELUXE STYLING ----------------
+# We remove the toggle. This app should always look Romantic (Pink/Red theme).
+# If you really want dark mode, we can add it back, but this looks better.
 
-def apply_theme():
-    # Toggle button
-    is_dark = st.toggle("🌗 Dark Mode", value=st.session_state.theme_toggle)
-    st.session_state.theme_toggle = is_dark
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Pacifico&family=Quicksand:wght@400;600&display=swap');
 
-    # Define Colors
-    if is_dark:
-        bg_color = "#0e1117"
-        card_color = "#161b22"
-        text_color = "#f0f6fc"
-        border_color = "#30363d"
-    else:
-        bg_color = "#ffe6e6"  # Light pink background
-        card_color = "#ffffff" # White card
-        text_color = "#000000" # Black text
-        border_color = "#e1e4e8"
+.stApp {
+    background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 99%, #fecfef 100%);
+    background-attachment: fixed;
+}
 
-    # CSS Injection with !important to force visibility
-    st.markdown(f"""
-    <style>
-    .stApp {{
-        background-color: {bg_color};
-    }}
-    div.card {{
-        background-color: {card_color};
-        padding: 30px;
-        border-radius: 20px;
-        text-align: center;
-        color: {text_color} !important;
-        box-shadow: 0px 10px 30px rgba(0,0,0,0.2);
-        border: 1px solid {border_color};
-    }}
-    /* Force headers and text inside the card to inherit the correct color */
-    div.card h1, div.card h2, div.card h3, div.card p, div.card span {{
-        color: {text_color} !important;
-    }}
-    </style>
-    """, unsafe_allow_html=True)
+div.card {
+    background-color: rgba(255, 255, 255, 0.95);
+    padding: 40px;
+    border-radius: 25px;
+    text-align: center;
+    box-shadow: 0px 15px 35px rgba(255, 65, 108, 0.2);
+    border: 2px solid #fff;
+    margin-top: 20px;
+    margin-bottom: 20px;
+}
 
-apply_theme()
+h1 {
+    font-family: 'Pacifico', cursive;
+    color: #ff4757 !important;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+    font-size: 3.5rem !important;
+    text-align: center;
+}
+
+div.card h2 {
+    font-family: 'Quicksand', sans-serif;
+    color: #2f3542 !important;
+    font-weight: 600;
+}
+
+div.message-text {
+    font-family: 'Pacifico', cursive;
+    font-size: 28px;
+    color: #ff4757;
+    line-height: 1.6;
+    padding: 20px;
+}
+
+div.expiry-text {
+    font-family: 'Quicksand', sans-serif;
+    color: #a4b0be;
+    font-size: 14px;
+    margin-top: 20px;
+}
+
+/* Button Styling */
+div.stButton > button {
+    background: linear-gradient(45deg, #ff6b6b, #ff4757);
+    color: white;
+    border-radius: 30px;
+    border: none;
+    padding: 15px 30px;
+    font-size: 18px;
+    font-weight: bold;
+    box-shadow: 0px 5px 15px rgba(255, 71, 87, 0.4);
+    transition: transform 0.2s;
+    width: 100%;
+}
+div.stButton > button:hover {
+    transform: scale(1.05);
+    box-shadow: 0px 8px 20px rgba(255, 71, 87, 0.6);
+}
+
+</style>
+""", unsafe_allow_html=True)
 
 # ---------------- 4. HELPER FUNCTIONS ----------------
 def get_public_base_url():
     headers = st.context.headers
     host = headers.get("host")
     proto = headers.get("x-forwarded-proto", "https")
-    
-    # Fallback for localhost testing
-    if not host:
-        return "http://localhost:8501"
-        
+    if not host: return "http://localhost:8501"
     return f"{proto}://{host}"
 
 def generate_qr(data):
@@ -106,114 +125,116 @@ query = st.query_params
 if "id" in query:
     link_id = query["id"]
     
-    # Fetch document from Firebase
+    # Check Session State for "Reveal" status to prevent refresh loops
+    if "revealed" not in st.session_state:
+        st.session_state.revealed = False
+
     doc_ref = db.collection("links").document(link_id)
     doc = doc_ref.get()
 
     st.markdown("<div class='card'>", unsafe_allow_html=True)
-    st.subheader("💖 You received a secret message")
 
     if not doc.exists:
-        st.error("❌ Invalid or missing link ID.")
+        st.error("❌ Link not found")
     else:
         data = doc.to_dict()
         now_ts = int(time.time())
 
-        # 1. Check if already opened
-        if data.get("opened", False):
-            st.error("💔 This surprise has already been opened.")
-            st.caption("This message was set to self-destruct after one view.")
+        # 1. ALREADY OPENED CHECK
+        if data.get("opened", False) and not st.session_state.revealed:
+            st.title("💔")
+            st.subheader("Already Opened")
+            st.warning("This secret message has self-destructed.")
         
-        # 2. Check if expired
+        # 2. EXPIRED CHECK
         elif now_ts > data.get("expiry", 0):
-            st.error("⏳ This surprise has expired.")
-            st.caption("You were too late!")
+            st.title("⏳")
+            st.subheader("Too Late!")
+            st.warning("This message has expired.")
+
+        # 3. READY TO OPEN (The Envelope State)
+        elif not st.session_state.revealed:
+            st.title("💌")
+            st.subheader("You have a secret message!")
+            st.markdown("Someone sent you a confession. It can only be viewed **once**.")
+            st.markdown("<br>", unsafe_allow_html=True)
             
-        # 3. Valid! Show Message
+            # The "Tap to Open" Button
+            if st.button("Tap to Open Envelope ✨"):
+                # Mark as opened in Database
+                doc_ref.update({"opened": True})
+                st.session_state.revealed = True
+                st.rerun()
+
+        # 4. REVEALED MESSAGE
         else:
-            # Mark as opened IMMEDIATELY in database
-            doc_ref.update({"opened": True})
-            
-            # Show the content
             st.balloons()
-            st.success(f"💌 {data['message']}")
-            st.caption("Someone secretly likes you 😉")
+            st.title("💖")
+            st.markdown(f"<div class='message-text'>“{data['message']}”</div>", unsafe_allow_html=True)
+            st.caption("— Anonymous")
             
             st.divider()
-            
-            # Show expiry info safely (No loops)
             expiry_date = datetime.fromtimestamp(data["expiry"])
-            st.caption(f"🔒 Link auto-expires at: {expiry_date.strftime('%H:%M:%S')}")
-            st.warning("⚠️ You can only see this ONCE. If you refresh, it will be gone.")
+            st.markdown(f"<div class='expiry-text'>🔒 Valid until: {expiry_date.strftime('%H:%M')}</div>", unsafe_allow_html=True)
+            st.success("This link is now locked forever.")
 
     st.markdown("</div>", unsafe_allow_html=True)
     
-    # Button to go back to home
-    if st.button("Create your own surprise?"):
-        st.query_params.clear() 
+    if st.button("Send your own? 💘"):
+        st.query_params.clear()
         st.rerun()
 
     st.stop()
 
 
 # === CREATOR VIEW (Creating a Message) ===
-st.title("💘 Cupid's Surprise")
-st.caption("Anonymous • One-time • Expiring Confessions")
+st.title("Cupid's Surprise")
+st.markdown("### Create a One-Time Self-Destructing Message")
 
-with st.form("create_form"):
-    message = st.text_area(
-        "💌 Write your message",
-        placeholder="Someone secretly likes you...",
-        max_chars=300
-    )
-
-    expiry_minutes = st.selectbox(
-        "⏱ Link expiry time",
-        [5, 10, 30, 60, 1440],
-        format_func=lambda x: f"{x} minutes" if x < 60 else f"{x//60} hour(s)"
-    )
+with st.container():
+    st.markdown("<div class='card'>", unsafe_allow_html=True)
     
-    submitted = st.form_submit_button("💘 Generate Surprise")
-
-if submitted:
-    if not message.strip():
-        st.warning("Please write a message first!")
-        st.stop()
-
-    # Create data payload
-    link_id = secrets.token_urlsafe(8)
-    expiry_ts = int((datetime.now() + timedelta(minutes=expiry_minutes)).timestamp())
+    message = st.text_area("💌 Your Secret Message", placeholder="I've had a crush on you for a while...", max_chars=300)
     
-    doc_data = {
-        "message": message,
-        "created_at": int(time.time()),
-        "expiry": expiry_ts,
-        "opened": False
-    }
+    col1, col2 = st.columns(2)
+    with col1:
+        expiry_minutes = st.selectbox("⏱ Expires in", [15, 30, 60, 1440], format_func=lambda x: f"{x} mins" if x < 60 else "24 hours")
+    with col2:
+        st.write("") 
+        st.write("")
+        # Just a visual placeholder, functionality is automatic
+        st.caption("🔒 Security: High")
 
-    # Save to Firebase
-    try:
-        db.collection("links").document(link_id).set(doc_data)
-        
-        # Generate Link
-        base_url = get_public_base_url()
-        share_link = f"{base_url}/?id={link_id}"
+    if st.button("Generate Link 💘"):
+        if not message.strip():
+            st.error("Please write a message!")
+        else:
+            link_id = secrets.token_urlsafe(8)
+            expiry_ts = int((datetime.now() + timedelta(minutes=expiry_minutes)).timestamp())
+            
+            doc_data = {
+                "message": message,
+                "created_at": int(time.time()),
+                "expiry": expiry_ts,
+                "opened": False
+            }
+            
+            try:
+                with st.spinner("Encrypting your secret..."):
+                    db.collection("links").document(link_id).set(doc_data)
+                    time.sleep(1) # Fake delay for drama
+                
+                base_url = get_public_base_url()
+                share_link = f"{base_url}/?id={link_id}"
+                
+                st.success("✨ Secret Link Created!")
+                st.code(share_link)
+                
+                qr_img = generate_qr(share_link)
+                st.image(qr_img, width=200, caption="Scan to Open")
+                
+            except Exception as e:
+                st.error(f"Error: {e}")
 
-        st.success("🎉 Your surprise link is ready!")
-        st.code(share_link)
+    st.markdown("</div>", unsafe_allow_html=True)
 
-        # QR Code
-        col1, col2 = st.columns([1, 2])
-        with col1:
-            qr = generate_qr(share_link)
-            st.image(qr, caption="Scan to open", width=150)
-        with col2:
-            st.info("""
-            **How it works:**
-            1. Share the link or QR code.
-            2. The recipient can view it **once**.
-            3. After that, it locks forever.
-            """)
-
-    except Exception as e:
-        st.error(f"Error saving to database: {e}")
