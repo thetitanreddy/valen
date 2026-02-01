@@ -31,9 +31,6 @@ if not firebase_admin._apps:
 db = firestore.client()
 
 # ---------------- 3. DELUXE STYLING ----------------
-# We remove the toggle. This app should always look Romantic (Pink/Red theme).
-# If you really want dark mode, we can add it back, but this looks better.
-
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Pacifico&family=Quicksand:wght@400;600&display=swap');
@@ -100,7 +97,6 @@ div.stButton > button:hover {
     transform: scale(1.05);
     box-shadow: 0px 8px 20px rgba(255, 71, 87, 0.6);
 }
-
 </style>
 """, unsafe_allow_html=True)
 
@@ -125,7 +121,6 @@ query = st.query_params
 if "id" in query:
     link_id = query["id"]
     
-    # Check Session State for "Reveal" status to prevent refresh loops
     if "revealed" not in st.session_state:
         st.session_state.revealed = False
 
@@ -139,29 +134,36 @@ if "id" in query:
     else:
         data = doc.to_dict()
         now_ts = int(time.time())
-
-        # 1. ALREADY OPENED CHECK
-        if data.get("opened", False) and not st.session_state.revealed:
-            st.title("💔")
-            st.subheader("Already Opened")
-            st.warning("This secret message has self-destructed.")
         
-        # 2. EXPIRED CHECK
-        elif now_ts > data.get("expiry", 0):
+        # Get settings (default to True for old links for safety)
+        is_one_time = data.get("one_time", True)
+
+        # 1. EXPIRED CHECK (Always applies)
+        if now_ts > data.get("expiry", 0):
             st.title("⏳")
             st.subheader("Too Late!")
             st.warning("This message has expired.")
+
+        # 2. ALREADY OPENED CHECK (Only if one-time view is enabled)
+        elif is_one_time and data.get("opened", False) and not st.session_state.revealed:
+            st.title("💔")
+            st.subheader("Already Opened")
+            st.warning("This secret message has self-destructed.")
 
         # 3. READY TO OPEN (The Envelope State)
         elif not st.session_state.revealed:
             st.title("💌")
             st.subheader("You have a secret message!")
-            st.markdown("Someone sent you a confession. It can only be viewed **once**.")
+            
+            if is_one_time:
+                st.caption("⚠️ Warning: You can only view this ONCE.")
+            else:
+                st.caption("✨ You can view this until the timer expires.")
+                
             st.markdown("<br>", unsafe_allow_html=True)
             
-            # The "Tap to Open" Button
             if st.button("Tap to Open Envelope ✨"):
-                # Mark as opened in Database
+                # Always mark as opened in DB so we know it was seen
                 doc_ref.update({"opened": True})
                 st.session_state.revealed = True
                 st.rerun()
@@ -176,7 +178,11 @@ if "id" in query:
             st.divider()
             expiry_date = datetime.fromtimestamp(data["expiry"])
             st.markdown(f"<div class='expiry-text'>🔒 Valid until: {expiry_date.strftime('%H:%M')}</div>", unsafe_allow_html=True)
-            st.success("This link is now locked forever.")
+            
+            if is_one_time:
+                st.success("This link is now locked forever.")
+            else:
+                st.success("You can refresh and read this again until time runs out.")
 
     st.markdown("</div>", unsafe_allow_html=True)
     
@@ -189,7 +195,7 @@ if "id" in query:
 
 # === CREATOR VIEW (Creating a Message) ===
 st.title("Cupid's Surprise")
-st.markdown("### Create a One-Time Self-Destructing Message")
+st.markdown("### Create a Secret Message")
 
 with st.container():
     st.markdown("<div class='card'>", unsafe_allow_html=True)
@@ -202,8 +208,8 @@ with st.container():
     with col2:
         st.write("") 
         st.write("")
-        # Just a visual placeholder, functionality is automatic
-        st.caption("🔒 Security: High")
+        # New Checkbox for One-Time View
+        is_one_time = st.checkbox("💣 Self-destruct after viewing?", value=True)
 
     if st.button("Generate Link 💘"):
         if not message.strip():
@@ -216,13 +222,14 @@ with st.container():
                 "message": message,
                 "created_at": int(time.time()),
                 "expiry": expiry_ts,
-                "opened": False
+                "opened": False,
+                "one_time": is_one_time  # Save the preference
             }
             
             try:
                 with st.spinner("Encrypting your secret..."):
                     db.collection("links").document(link_id).set(doc_data)
-                    time.sleep(1) # Fake delay for drama
+                    time.sleep(1)
                 
                 base_url = get_public_base_url()
                 share_link = f"{base_url}/?id={link_id}"
@@ -237,4 +244,3 @@ with st.container():
                 st.error(f"Error: {e}")
 
     st.markdown("</div>", unsafe_allow_html=True)
-
