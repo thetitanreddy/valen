@@ -1,141 +1,142 @@
 import streamlit as st
 import base64
 import time
+import qrcode
+import io
+import urllib.parse
 
-# --- CONFIGURATION ---
+# --- PAGE CONFIG ---
 st.set_page_config(
-    page_title="Valentine Surprise",
-    page_icon="💌",
+    page_title="Valentine Surprise 💌",
+    page_icon="💘",
     layout="centered"
 )
 
-# --- HELPER FUNCTIONS ---
+# --- HELPERS ---
 def encode_data(text):
-    """Encodes text to Base64 to make the URL look cleaner."""
-    return base64.b64encode(text.encode()).decode()
+    return urllib.parse.quote(
+        base64.b64encode(text.encode()).decode()
+    )
 
 def decode_data(text):
-    """Decodes Base64 back to text."""
     try:
-        return base64.b64decode(text.encode()).decode()
+        return base64.b64decode(
+            urllib.parse.unquote(text).encode()
+        ).decode()
     except:
         return "Unknown"
 
-# --- CSS STYLING ---
+def generate_qr(link):
+    qr = qrcode.make(link)
+    buf = io.BytesIO()
+    qr.save(buf, format="PNG")
+    return buf.getvalue()
+
+def get_base_url():
+    return st.request.url.split("?")[0].rstrip("/")
+
+# --- STYLES ---
 def apply_style():
-    st.markdown(
-        """
-        <style>
-        .stApp {
-            background: linear-gradient(to bottom right, #ffe6e6, #ffb3b3);
-        }
-        .card {
-            background-color: rgba(255, 255, 255, 0.9);
-            border: 3px solid #ff4d4d;
-            border-radius: 25px;
-            padding: 40px;
-            text-align: center;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
-        }
-        .message-text {
-            font-family: 'Comic Sans MS', cursive, sans-serif;
-            color: #d63384;
-            font-size: 30px;
-            font-weight: bold;
-            line-height: 1.6;
-        }
-        .signature {
-            font-family: 'Arial', sans-serif;
-            color: #555;
-            font-style: italic;
-            margin-top: 20px;
-            font-size: 18px;
-        }
-        .big-emoji {
-            font-size: 80px;
-            margin-bottom: 20px;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
+    st.markdown("""
+    <style>
+    .stApp {
+        background: linear-gradient(to bottom right, #ffe6e6, #ffb3b3);
+    }
+    .card {
+        background: rgba(255,255,255,0.95);
+        border-radius: 25px;
+        padding: 40px;
+        text-align: center;
+        box-shadow: 0 12px 30px rgba(0,0,0,0.15);
+    }
+    .message {
+        font-size: 30px;
+        color: #d63384;
+        font-weight: bold;
+        font-family: 'Comic Sans MS', cursive;
+    }
+    .from {
+        margin-top: 20px;
+        font-style: italic;
+        color: #555;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
-# --- MAIN LOGIC ---
+# --- QUERY PARAMS ---
+params = st.query_params
+msg = params.get("msg")
+sender = params.get("from")
 
-# 1. Check Query Parameters (The Receiver View)
-query_params = st.query_params
-msg_param = query_params.get("msg", None)
-from_param = query_params.get("from", None)
-
-if msg_param:
-    # --- RECEIVER VIEW ---
+# ================= RECEIVER VIEW =================
+if msg:
     apply_style()
-    
-    # Decode the hidden message and sender
-    message_text = decode_data(msg_param)
-    sender_name = decode_data(from_param) if from_param else "Secret Admirer"
 
-    # Display the Valentine Card
+    message_text = decode_data(msg)
+    sender_name = decode_data(sender) if sender else "Secret Admirer 💘"
+
     st.markdown(f"""
         <div class="card">
-            <div class="big-emoji">💌</div>
-            <div class="message-text">"{message_text}"</div>
-            <div class="signature">- From: {sender_name}</div>
+            <h1>💌</h1>
+            <div class="message">"{message_text}"</div>
+            <div class="from">— {sender_name}</div>
         </div>
     """, unsafe_allow_html=True)
 
-    # Interactive Buttons
     col1, col2 = st.columns(2)
-    
+
     with col1:
-        if st.button("YES! ❤️", use_container_width=True, type="primary"):
+        if st.button("YES ❤️", use_container_width=True, type="primary"):
             st.balloons()
-            st.success("Yay! They said YES! 💖")
+            st.success("They said YES 💖")
             time.sleep(1)
             st.snow()
-            
+
     with col2:
         if st.button("No 💔", use_container_width=True):
-            st.error("Wrong answer! Try clicking the other button... 😉")
+            st.error("Wrong choice 😜 Try again")
 
-    # Link to make their own
-    st.write("---")
-    if st.button("↺ Create your own link"):
+    st.divider()
+    if st.button("↺ Create your own surprise"):
         st.query_params.clear()
         st.rerun()
 
+# ================= CREATOR VIEW =================
 else:
-    # --- CREATOR VIEW ---
-    st.title("🏹 Cupid's Link Generator")
-    st.write("Create a surprise message link for someone special.")
+    st.title("🏹 Cupid’s Surprise Generator")
 
-    with st.container(border=True):
-        col1, col2 = st.columns(2)
-        with col1:
-            sender = st.text_input("Your Name", placeholder="e.g. Romeo")
-        with col2:
-            # Helper to get the correct URL
-            # Users must update this if deployed
-            base_url = st.text_input("Your App URL", value="http://localhost:8501")
-        
-        message = st.text_area("Your Message", placeholder="Will you be my Valentine?", height=100)
+    message = st.text_area(
+        "Your Message 💕",
+        placeholder="Will you be my Valentine?",
+        height=120
+    )
 
-        submitted = st.button("Generate Link", type="primary")
+    anonymous = st.toggle("Anonymous Crush Mode 💭", value=False)
 
-    if submitted:
+    sender_name = ""
+    if not anonymous:
+        sender_name = st.text_input("Your Name (Optional)")
+
+    if st.button("Generate Surprise Link 💘", type="primary"):
         if not message:
-            st.warning("Please enter a message first!")
+            st.warning("Please write a message!")
         else:
-            # Encode inputs
             enc_msg = encode_data(message)
-            enc_sender = encode_data(sender) if sender else ""
-            
-            # Create full URL
-            # We strip trailing slashes to ensure the query param appends correctly
-            clean_base_url = base_url.rstrip("/")
-            final_link = f"{clean_base_url}/?msg={enc_msg}&from={enc_sender}"
-            
-            st.success("Link Ready! Copy it below:")
+            base_url = get_base_url()
+
+            final_link = f"{base_url}?msg={enc_msg}"
+
+            if not anonymous and sender_name:
+                enc_sender = encode_data(sender_name)
+                final_link += f"&from={enc_sender}"
+
+            st.success("💖 Your surprise is ready!")
+
+            # --- SHOW LINK ---
             st.code(final_link, language="text")
-            st.info("👉 Send this link to your crush/partner!")
+
+            # --- QR CODE ---
+            qr_img = generate_qr(final_link)
+            st.image(qr_img, caption="📱 Scan to open the surprise")
+
+            st.info("Share the link or QR code with your crush 💌")
