@@ -4,147 +4,146 @@ import io
 import base64
 import secrets
 import time
+from datetime import datetime, timedelta
 
-# ---------------- CONFIG ----------------
+# ---------------- PAGE CONFIG ----------------
 st.set_page_config(
     page_title="Cupid's Surprise 💘",
     page_icon="💌",
     layout="centered"
 )
 
-# ---------------- SAFE PUBLIC URL ----------------
+# ---------------- SESSION STATE ----------------
+if "opened_links" not in st.session_state:
+    st.session_state.opened_links = set()
+
+# ---------------- THEME TOGGLE ----------------
+theme = st.toggle("🌗 Dark Mode", value=False)
+
+def apply_theme(dark=False):
+    bg = "#0e1117" if dark else "#ffe6e6"
+    card = "#161b22" if dark else "#ffffff"
+    text = "#f0f6fc" if dark else "#000000"
+
+    st.markdown(f"""
+    <style>
+    .stApp {{
+        background-color: {bg};
+    }}
+    .card {{
+        background-color: {card};
+        padding: 30px;
+        border-radius: 20px;
+        text-align: center;
+        color: {text};
+        box-shadow: 0px 10px 30px rgba(0,0,0,0.2);
+    }}
+    </style>
+    """, unsafe_allow_html=True)
+
+apply_theme(theme)
+
+# ---------------- PUBLIC URL ----------------
 def get_public_base_url():
     headers = st.context.headers
     host = headers.get("host")
     proto = headers.get("x-forwarded-proto", "https")
 
-    if not host:
-        st.error("🚫 Public link generation unavailable.")
-        st.stop()
-
-    if "localhost" in host or "127.0.0.1" in host:
-        st.error("🚫 Localhost links are disabled.")
-        st.info("Deploy this app on Streamlit Cloud.")
+    if not host or "localhost" in host:
+        st.error("🚫 Public sharing only works on Streamlit Cloud")
         st.stop()
 
     return f"{proto}://{host}"
 
-# ---------------- QR GENERATOR ----------------
+# ---------------- QR ----------------
 def generate_qr(data):
     qr = qrcode.make(data)
     buf = io.BytesIO()
     qr.save(buf, format="PNG")
     return buf.getvalue()
 
-# ---------------- HEADER ----------------
-st.markdown(
-    """
-    <div style="text-align:center;">
-        <h1>💘 Cupid's Surprise</h1>
-        <p style="color:gray;">Send an anonymous or named crush message</p>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+# ---------------- QUERY PARAMS ----------------
+query = st.query_params
 
-st.divider()
+# ---------------- MESSAGE VIEW MODE ----------------
+if "m" in query and "e" in query and "id" in query:
+    link_id = query["id"]
 
-# ---------------- CREATE MESSAGE ----------------
-st.subheader("✍️ Create Your Message")
+    # One-time view check
+    if link_id in st.session_state.opened_links:
+        st.error("💔 This surprise has already been opened.")
+        st.stop()
 
-anonymous_mode = st.toggle("Anonymous Crush Mode 🕶️", value=True)
+    expiry_time = datetime.fromtimestamp(int(query["e"]))
+    now = datetime.now()
 
-sender_name = ""
-if not anonymous_mode:
-    sender_name = st.text_input("Your Name 💖", placeholder="Enter your name")
+    if now > expiry_time:
+        st.error("⏳ This surprise has expired.")
+        st.stop()
+
+    # Countdown
+    remaining = int((expiry_time - now).total_seconds())
+
+    st.markdown("<div class='card'>", unsafe_allow_html=True)
+    st.subheader("💖 You received a secret message")
+
+    timer = st.empty()
+    msg_box = st.empty()
+
+    while remaining > 0:
+        mins, secs = divmod(remaining, 60)
+        timer.markdown(f"⏳ **Expires in {mins:02d}:{secs:02d}**")
+        time.sleep(1)
+        remaining -= 1
+
+    try:
+        decoded = base64.urlsafe_b64decode(query["m"]).decode()
+        msg_box.success(decoded)
+        st.caption("Someone secretly likes you 😉")
+
+        # Mark as opened
+        st.session_state.opened_links.add(link_id)
+
+    except:
+        st.error("Invalid message")
+
+    st.markdown("</div>", unsafe_allow_html=True)
+    st.stop()
+
+# ---------------- CREATOR MODE ----------------
+st.title("💘 Cupid's Surprise")
+st.caption("Anonymous • One-time • Expiring Confessions")
 
 message = st.text_area(
-    "Message 💌",
+    "💌 Write your message",
     placeholder="Someone secretly likes you...",
     max_chars=300
 )
 
-# -------- EXPIRY SELECTION --------
-expiry_option = st.selectbox(
-    "⏳ Link Expiry",
-    [
-        "10 minutes",
-        "1 hour",
-        "24 hours",
-        "7 days",
-        "Never expire"
-    ]
+expiry_minutes = st.selectbox(
+    "⏱ Link expiry time",
+    [5, 10, 30, 60, 1440],
+    format_func=lambda x: f"{x} minutes" if x < 60 else f"{x//60} hour(s)"
 )
 
-expiry_map = {
-    "10 minutes": 600,
-    "1 hour": 3600,
-    "24 hours": 86400,
-    "7 days": 604800,
-    "Never expire": None
-}
-
-# ---------------- GENERATE LINK ----------------
-if st.button("💘 Generate Surprise", use_container_width=True):
-
+if st.button("💘 Generate Surprise"):
     if not message.strip():
-        st.warning("Please write a message.")
-        st.stop()
-
-    if not anonymous_mode and not sender_name.strip():
-        st.warning("Please enter your name or enable anonymous mode.")
+        st.warning("Please write a message")
         st.stop()
 
     base_url = get_public_base_url()
+    link_id = secrets.token_urlsafe(8)
 
-    expiry_seconds = expiry_map[expiry_option]
-    expiry_time = None if expiry_seconds is None else int(time.time()) + expiry_seconds
+    encoded_msg = base64.urlsafe_b64encode(message.encode()).decode()
+    expiry_ts = int((datetime.now() + timedelta(minutes=expiry_minutes)).timestamp())
 
-    payload = {
-        "m": message,
-        "a": anonymous_mode,
-        "s": sender_name,
-        "e": expiry_time
-    }
-
-    encoded = base64.urlsafe_b64encode(str(payload).encode()).decode()
-    token = secrets.token_urlsafe(8)
-
-    share_link = f"{base_url}/?data={encoded}&id={token}"
+    share_link = f"{base_url}/?id={link_id}&m={encoded_msg}&e={expiry_ts}"
 
     st.success("🎉 Your surprise link is ready!")
+
     st.code(share_link)
 
     qr = generate_qr(share_link)
-    st.image(qr, width=220, caption="📱 Scan to open")
+    st.image(qr, caption="📱 Scan to open", width=220)
 
-    if expiry_time:
-        st.info(f"⏰ Link expires in: {expiry_option}")
-    else:
-        st.info("♾️ This link never expires")
-
-# ---------------- VIEW MESSAGE MODE ----------------
-query = st.query_params
-
-if "data" in query:
-    try:
-        decoded = base64.urlsafe_b64decode(query["data"]).decode()
-        payload = eval(decoded)  # safe (self-generated)
-
-        # Check expiry
-        if payload["e"] is not None and time.time() > payload["e"]:
-            st.error("⛔ This link has expired.")
-            st.stop()
-
-        st.divider()
-        st.subheader("💖 You Received a Message")
-
-        st.success(payload["m"])
-
-        if payload["a"]:
-            st.caption("🕶️ Sent anonymously")
-        else:
-            st.caption(f"💌 From: {payload['s']}")
-
-    except Exception:
-        st.error("❌ Invalid or corrupted link.")
+    st.info("🔒 Anonymous • One-time • Auto-expires")
