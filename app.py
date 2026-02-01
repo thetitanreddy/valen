@@ -10,7 +10,7 @@ from firebase_admin import credentials, firestore
 # ---------------- 1. PAGE CONFIG ----------------
 st.set_page_config(
     page_title="Cupid's Secret",
-    page_icon="🐎",
+    page_icon="🖤",
     layout="centered"
 )
 
@@ -67,7 +67,7 @@ h2, h3, p, label, .stMarkdown, .stCheckbox, .stCaption {
 }
 
 /* 4. INPUT FIELDS (Subtle Charcoal) */
-.stTextArea textarea, .stSelectbox > div > div, .stTextInput > div > div {
+.stTextArea textarea, .stSelectbox > div > div, .stTextInput > div > div, .stNumberInput > div > div > input {
     background-color: #2b2b2b !important; /* Dark Charcoal */
     border-radius: 8px !important;
     border: 1px solid #404040 !important;
@@ -142,8 +142,6 @@ if "id" in query:
     doc_ref = db.collection("links").document(link_id)
     doc = doc_ref.get()
 
-    # No card wrapper here anymore
-
     if not doc.exists:
         st.error("❌ The wind has blown this message away. (Invalid Link)")
     else:
@@ -183,7 +181,6 @@ if "id" in query:
         # 4. Show Message
         else:
             st.balloons()
-            # Clean message display without a box
             st.markdown(f"<div class='message-content'>“{data['message']}”</div>", unsafe_allow_html=True)
             st.markdown("<p style='text-align: center; opacity: 0.8;'>— Anonymous</p>", unsafe_allow_html=True)
             
@@ -206,17 +203,37 @@ if "id" in query:
 st.title("Cupid's Secret")
 st.markdown("<h3 style='text-align: center; color: rgba(255,255,255,0.8); font-size: 1.2rem;'>Compose a timeless message</h3>", unsafe_allow_html=True)
 
-# No container or card wrappers here
 st.markdown("<br>", unsafe_allow_html=True)
 message = st.text_area("Your Confession", placeholder="Write your secret here...", max_chars=300)
 
 col1, col2 = st.columns(2)
 with col1:
-    expiry_minutes = st.selectbox("Duration", [15, 30, 60, 1440], format_func=lambda x: f"{x} Minutes" if x < 60 else "24 Hours")
+    # UPDATED DURATION OPTIONS
+    duration_options = ["15 Mins", "30 Mins", "1 Hr", "24 Hr", "Custom"]
+    duration_choice = st.selectbox("Duration", duration_options)
+    
+    # Logic to handle the choice
+    expiry_minutes = 15  # Default
+    
+    if duration_choice == "Custom":
+        expiry_minutes = st.number_input("Minutes", min_value=1, max_value=10080, value=60)
+    elif duration_choice == "15 Mins":
+        expiry_minutes = 15
+    elif duration_choice == "30 Mins":
+        expiry_minutes = 30
+    elif duration_choice == "1 Hr":
+        expiry_minutes = 60
+    elif duration_choice == "24 Hr":
+        expiry_minutes = 1440
+
 with col2:
     st.write("") 
     st.write("")
-    # Checkbox for Vanishing Mode
+    # Adjust spacing if "Custom" box appears so checkbox aligns well
+    if duration_choice == "Custom":
+        st.write("") 
+        st.write("")
+    
     is_one_time = st.checkbox("Vanish after one view?", value=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
@@ -244,12 +261,10 @@ if st.button("Seal & Generate Link 📜"):
             base_url = get_public_base_url()
             share_link = f"{base_url}/?id={link_id}"
             
-            # Results shown cleanly without a box wrapper
             st.success("✨ Your message has been sealed.")
             st.code(share_link)
             
             qr_img = generate_qr(share_link)
-            # Center the QR code
             col_l, col_c, col_r = st.columns([1,2,1])
             with col_c:
                  st.image(qr_img, width=200, caption="Scan to Reveal")
