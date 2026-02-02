@@ -181,7 +181,7 @@ HTML_RESULT = f"""
             </div>
             
             <button onclick="shareQR()" class="btn" style="background:#25D366; color:#fff; margin-top:20px;">
-                Share QR (WhatsApp) 📤
+                Share QR () 📤
             </button>
             
             <br><br>
