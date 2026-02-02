@@ -1,4 +1,4 @@
-streamlit>=1.32
-qrcode[pil]>=7.4
-Pillow>=9.5
+Flask
 firebase-admin
+Pillow
+qrcode
