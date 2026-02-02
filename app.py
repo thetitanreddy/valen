@@ -28,7 +28,7 @@ if not firebase_admin._apps:
 
 db = firestore.client()
 
-# --- 2. PREMIUM ANIMATED STYLES ---
+# --- 2. STYLES ---
 STYLE = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Lato:wght@300;400;700&display=swap');
@@ -65,7 +65,7 @@ h1 {
     transition: transform 0.3s ease;
 }
 
-textarea, select, input {
+textarea, select, input[type="text"], input[type="number"] {
     background-color: #252525; border: 1px solid #444; color: white;
     padding: 15px; border-radius: 10px; width: 100%;
     font-family: 'Lato', sans-serif; font-size: 1rem;
@@ -88,6 +88,41 @@ textarea:focus, input:focus { border-color: #888; }
     box-shadow: 0 5px 15px rgba(255,255,255,0.1);
 }
 .btn:hover { transform: translateY(-3px) scale(1.02); background: #ffffff; }
+
+/* --- CUSTOM CHECKBOX STYLING (Fixes visibility) --- */
+.checkbox-container {
+    display: flex; align-items: center; gap: 12px; font-size: 0.95rem;
+    margin-bottom: 25px; cursor: pointer; opacity: 0.9; position: relative;
+    justify-content: center; /* Center the whole label */
+}
+.checkbox-container input { position: absolute; opacity: 0; cursor: pointer; height: 0; width: 0; }
+.checkmark {
+    position: relative; height: 24px; width: 24px;
+    background-color: #252525; border: 1px solid #444; border-radius: 6px; transition: all 0.3s;
+}
+.checkbox-container:hover input ~ .checkmark { background-color: #333; }
+/* When checked: White background */
+.checkbox-container input:checked ~ .checkmark { background-color: #fff; border-color: #fff; }
+/* The tick mark */
+.checkmark:after { content: ""; position: absolute; display: none; }
+.checkbox-container input:checked ~ .checkmark:after { display: block; }
+/* Black tick color and shape */
+.checkbox-container .checkmark:after {
+    left: 8px; top: 4px; width: 6px; height: 12px;
+    border: solid black; border-width: 0 2px 2px 0; transform: rotate(45deg);
+}
+
+/* --- MINIMAL SHARE BUTTON --- */
+.share-btn-minimal {
+    background: transparent; border: 1px solid #444; color: #fff;
+    padding: 10px 15px; border-radius: 30px; font-size: 1.2rem;
+    cursor: pointer; margin-top: 20px; transition: all 0.3s ease;
+    display: inline-flex; align-items: center; justify-content: center; width: auto;
+}
+.share-btn-minimal:hover {
+    background: #fff; color: #000; border-color: #fff; transform: scale(1.1);
+    box-shadow: 0 0 15px rgba(255,255,255,0.3);
+}
 
 /* REVEAL SPECIFIC */
 .envelope-icon { font-size: 4rem; margin-bottom: 10px; display: inline-block; animation: heartbeat 2s infinite ease-in-out; }
@@ -138,10 +173,13 @@ HTML_CREATE = f"""
                         <option value="Days">Days</option>
                     </select>
                 </div>
-                <label style="display:flex; align-items:center; gap:12px; font-size:0.95rem; margin-bottom:25px; cursor:pointer; opacity:0.9;">
-                    <input type="checkbox" name="one_time" checked style="width:20px; height:20px; accent-color:#fff;">
+                
+                <label class="checkbox-container">
                     Vanish after 1 view?
+                    <input type="checkbox" name="one_time" checked>
+                    <span class="checkmark"></span>
                 </label>
+                
                 <button type="submit" class="btn" id="submitBtn">Seal Secret 🔒</button>
             </form>
         </div>
@@ -163,7 +201,7 @@ HTML_CREATE = f"""
 </html>
 """
 
-# RESULT PAGE WITH "SHARE IMAGE" LOGIC
+# RESULT PAGE WITH NEW MINIMAL SHARE BUTTON
 HTML_RESULT = f"""
 <!DOCTYPE html>
 <html>
@@ -180,34 +218,26 @@ HTML_RESULT = f"""
                 <img id="qrImage" src="data:image/png;base64,{{{{ qr_b64 }}}}" style="width:180px; margin:0; display:block;">
             </div>
             
-            <button onclick="shareQR()" class="btn" style="background:#25D366; color:#fff; margin-top:20px;">
-                Share QR () 📤
-            </button>
+            <div>
+                <button onclick="shareQR()" class="share-btn-minimal" title="Share QR Code">
+                    🔗
+                </button>
+            </div>
             
-            <br><br>
+            <br>
             <a href="/">Create Another</a>
         </div>
     </div>
-
     <script>
         async function shareQR() {{
             const img = document.getElementById('qrImage');
             const base64Response = await fetch(img.src);
             const blob = await base64Response.blob();
             const file = new File([blob], "secret_qr.png", {{ type: "image/png" }});
-
             if (navigator.share && navigator.canShare({{ files: [file] }})) {{
-                navigator.share({{
-                    files: [file],
-                    title: 'Cupid Secret',
-                    text: 'Scan this to see my secret message! 🤫'
-                }}).catch(console.error);
+                navigator.share({{ files: [file], title: 'Cupid Secret', text: 'Scan this! 🤫' }}).catch(console.error);
             }} else {{
-                const link = document.createElement('a');
-                link.href = img.src;
-                link.download = "secret_qr.png";
-                link.click();
-                alert("QR Saved! You can now send it on WhatsApp.");
+                const link = document.createElement('a'); link.href = img.src; link.download = "secret_qr.png"; link.click();
             }}
         }}
     </script>
@@ -215,7 +245,7 @@ HTML_RESULT = f"""
 </html>
 """
 
-# REPLY RESULT PAGE WITH "SHARE IMAGE" LOGIC
+# REPLY RESULT PAGE WITH NEW MINIMAL SHARE BUTTON
 HTML_REPLY_RESULT = f"""
 <!DOCTYPE html>
 <html>
@@ -235,34 +265,26 @@ HTML_REPLY_RESULT = f"""
                 <img id="qrImage" src="data:image/png;base64,{{{{ qr_b64 }}}}" style="width:150px; margin:0; display:block;">
             </div>
 
-            <button onclick="shareQR()" class="btn" style="background:#25D366; color:#fff; margin-top:20px;">
-                Share QR (WhatsApp) 📤
-            </button>
+            <div>
+                <button onclick="shareQR()" class="share-btn-minimal" title="Share QR Code">
+                    🔗
+                </button>
+            </div>
             
-            <br><br>
+            <br>
             <a href="/" style="font-size:0.8rem;">Start New Chat</a>
         </div>
     </div>
-
     <script>
         async function shareQR() {{
             const img = document.getElementById('qrImage');
             const base64Response = await fetch(img.src);
             const blob = await base64Response.blob();
             const file = new File([blob], "reply_qr.png", {{ type: "image/png" }});
-
             if (navigator.share && navigator.canShare({{ files: [file] }})) {{
-                navigator.share({{
-                    files: [file],
-                    title: 'Reply',
-                    text: 'Here is my reply! 🤫'
-                }}).catch(console.error);
+                navigator.share({{ files: [file], title: 'Reply', text: 'Here is my reply! 🤫' }}).catch(console.error);
             }} else {{
-                const link = document.createElement('a');
-                link.href = img.src;
-                link.download = "reply_qr.png";
-                link.click();
-                alert("QR Saved! You can now send it on WhatsApp.");
+                const link = document.createElement('a'); link.href = img.src; link.download = "reply_qr.png"; link.click();
             }}
         }}
     </script>
