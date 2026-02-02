@@ -14,16 +14,12 @@ import json
 app = Flask(__name__)
 
 # --- 1. FIREBASE SETUP ---
-# This looks for the 'FIREBASE_KEY_JSON' environment variable first (for Vercel).
-# If not found, it tries to load 'firebase_key.json' locally.
 if not firebase_admin._apps:
     if os.environ.get("FIREBASE_KEY_JSON"):
-        # Load from Environment Variable (Vercel/Render)
         cred_dict = json.loads(os.environ.get("FIREBASE_KEY_JSON"))
         cred = credentials.Certificate(cred_dict)
         firebase_admin.initialize_app(cred)
     else:
-        # Load from Local File (Computer)
         try:
             cred = credentials.Certificate("firebase_key.json")
             firebase_admin.initialize_app(cred)
@@ -79,6 +75,28 @@ textarea, input[type="text"], input[type="number"], select {
     box-sizing: border-box;
     font-size: 1rem;
 }
+
+/* DRAG & DROP ZONE STYLES */
+.drop-zone {
+    width: 100%;
+    padding: 25px;
+    border: 2px dashed #444;
+    border-radius: 10px;
+    background-color: #1e1e1e;
+    color: #aaa;
+    text-align: center;
+    cursor: pointer;
+    transition: 0.3s;
+    box-sizing: border-box;
+    margin-bottom: 15px;
+}
+.drop-zone:hover, .drop-zone.dragover {
+    background-color: #2a2a2a;
+    border-color: #777;
+    color: #fff;
+}
+.drop-zone p { margin: 0; pointer-events: none; }
+
 .btn {
     background: linear-gradient(180deg, #4b4b4b, #1e1e1e);
     color: #fff;
@@ -98,9 +116,9 @@ textarea, input[type="text"], input[type="number"], select {
 
 /* ANTI-COPY PROTECTION */
 .protected-text {
-    -webkit-user-select: none; /* Safari */
-    -ms-user-select: none; /* IE */
-    user-select: none; /* Standard */
+    -webkit-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
     cursor: default;
 }
 
@@ -113,7 +131,7 @@ a:hover { color: #fff; }
 </style>
 """
 
-# PAGE: CREATE SECRET
+# PAGE: CREATE SECRET (With JS for Drag & Drop)
 HTML_CREATE = f"""
 <!DOCTYPE html>
 <html>
@@ -123,11 +141,14 @@ HTML_CREATE = f"""
         <h1>Cupid's Secret</h1>
         <div class="card">
             <h3 style="margin-top:0;">Compose a timeless message</h3>
-            <form action="/create" method="POST" enctype="multipart/form-data">
+            <form action="/create" method="POST" enctype="multipart/form-data" id="secretForm">
                 <textarea name="message" rows="4" placeholder="Write your secret here..." maxlength="300"></textarea>
                 
-                <p style="text-align:left; font-size:0.9rem; margin-bottom:5px; color:#ccc;">Attach Photo (Optional)</p>
-                <input type="file" name="file" accept="image/*" style="background:#2b2b2b; padding:10px;">
+                <div class="drop-zone" id="dropZone">
+                    <p>📸 Drag & Drop Photo<br><span style="font-size:0.8rem; opacity:0.6;">or click to browse</span></p>
+                    <input type="file" name="file" id="fileInput" accept="image/*" hidden>
+                </div>
+                <div id="filePreview" style="color: #51cf66; font-size: 0.9rem; margin-bottom: 15px; display: none;"></div>
                 
                 <div style="display:flex; gap:10px;">
                     <input type="number" name="duration_val" value="15" min="1" style="width:50%;">
@@ -147,11 +168,51 @@ HTML_CREATE = f"""
             </form>
         </div>
     </div>
+
+    <script>
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const filePreview = document.getElementById('filePreview');
+
+        // Click to browse
+        dropZone.addEventListener('click', () => fileInput.click());
+
+        // Update name on change
+        fileInput.addEventListener('change', () => {{
+            if (fileInput.files.length) {{
+                filePreview.innerText = "✅ " + fileInput.files[0].name;
+                filePreview.style.display = 'block';
+                dropZone.style.borderColor = '#51cf66';
+            }}
+        }});
+
+        // Drag Events
+        dropZone.addEventListener('dragover', (e) => {{
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        }});
+
+        dropZone.addEventListener('dragleave', () => {{
+            dropZone.classList.remove('dragover');
+        }});
+
+        dropZone.addEventListener('drop', (e) => {{
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            
+            if (e.dataTransfer.files.length) {{
+                fileInput.files = e.dataTransfer.files;
+                filePreview.innerText = "✅ " + e.dataTransfer.files[0].name;
+                filePreview.style.display = 'block';
+                dropZone.style.borderColor = '#51cf66';
+            }}
+        }});
+    </script>
 </body>
 </html>
 """
 
-# PAGE: RESULT (LINK & QR)
+# PAGE: RESULT
 HTML_RESULT = f"""
 <!DOCTYPE html>
 <html>
@@ -175,7 +236,7 @@ HTML_RESULT = f"""
 </html>
 """
 
-# PAGE: ENVELOPE (LOCKED)
+# PAGE: ENVELOPE
 HTML_ENVELOPE = f"""
 <!DOCTYPE html>
 <html>
@@ -246,30 +307,20 @@ HTML_ERROR = f"""
 
 # --- 3. HELPER FUNCTIONS ---
 def process_image(file):
-    """Compresses image to fit in DB (~1MB limit)"""
     try:
         img = Image.open(file)
         if img.mode in ("RGBA", "P"): img = img.convert("RGB")
-        
-        # Resize if too big
         max_dim = 800
         if max(img.size) > max_dim:
             img.thumbnail((max_dim, max_dim))
-            
         buf = io.BytesIO()
         img.save(buf, format='JPEG', quality=70, optimize=True)
         b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
-        
-        # Firestore limit is 1MB (1,048,576 bytes). 
-        # Base64 increases size by ~33%, so we aim for < 750KB raw.
-        if len(b64) > 1000000: 
-            return None 
+        if len(b64) > 1000000: return None 
         return b64
-    except: 
-        return None
+    except: return None
 
 # --- 4. FLASK ROUTES ---
-
 @app.route("/", methods=["GET"])
 def home():
     return render_template_string(HTML_CREATE)
@@ -279,26 +330,20 @@ def create():
     msg = request.form.get("message", "")
     f = request.files.get("file")
     
-    # Image Logic
     img_b64 = None
     if f and f.filename != '':
         img_b64 = process_image(f)
         if not img_b64 and len(msg) < 1:
              return render_template_string(HTML_ERROR, icon="⚠️", title="Too Large", text="Image is too big or message is empty.")
 
-    # Timer Logic
-    try:
-        val = int(request.form.get("duration_val", 15))
-    except:
-        val = 15
-        
+    try: val = int(request.form.get("duration_val", 15))
+    except: val = 15
     unit = request.form.get("duration_unit", "Minutes")
     mult = 1
     if unit == "Hours": mult = 60
     elif unit == "Days": mult = 1440
     minutes = val * mult
     
-    # Save to Firestore
     link_id = secrets.token_urlsafe(8)
     expiry = int((datetime.now() + timedelta(minutes=minutes)).timestamp())
     one_time = request.form.get("one_time") is not None
@@ -313,11 +358,9 @@ def create():
     }
     db.collection("links").document(link_id).set(doc)
     
-    # Create Links
     base = request.host_url.rstrip("/")
     share_link = f"{base}/secret/{link_id}"
     
-    # QR Code
     qr = qrcode.make(share_link)
     buf = io.BytesIO()
     qr.save(buf, format="PNG")
@@ -329,22 +372,10 @@ def create():
 def view_secret(link_id):
     doc_ref = db.collection("links").document(link_id)
     doc = doc_ref.get()
-    
-    # 1. Check Existence
-    if not doc.exists:
-        return render_template_string(HTML_ERROR, icon="💨", title="Invalid Link", text="The wind has blown this away.")
-    
+    if not doc.exists: return render_template_string(HTML_ERROR, icon="💨", title="Invalid Link", text="The wind has blown this away.")
     data = doc.to_dict()
-    
-    # 2. Check Expiry
-    if int(time.time()) > data['expiry']:
-        return render_template_string(HTML_ERROR, icon="⏳", title="Expired", text="This message is lost to time.")
-    
-    # 3. Check if One-Time & Opened
-    if data['one_time'] and data['opened']:
-         return render_template_string(HTML_ERROR, icon="💔", title="Already Seen", text="This secret has vanished forever.")
-         
-    # 4. Show Envelope
+    if int(time.time()) > data['expiry']: return render_template_string(HTML_ERROR, icon="⏳", title="Expired", text="This message is lost to time.")
+    if data['one_time'] and data['opened']: return render_template_string(HTML_ERROR, icon="💔", title="Already Seen", text="This secret has vanished forever.")
     warn = "⚠️ Warning: Vanishes forever after reading." if data['one_time'] else "✨ Available until expiry."
     return render_template_string(HTML_ENVELOPE, warning_text=warn, link_id=link_id)
 
@@ -352,27 +383,13 @@ def view_secret(link_id):
 def reveal(link_id):
     doc_ref = db.collection("links").document(link_id)
     doc = doc_ref.get()
-    
-    if not doc.exists: 
-        return render_template_string(HTML_ERROR, icon="❌", title="Error", text="Not found.")
-        
+    if not doc.exists: return render_template_string(HTML_ERROR, icon="❌", title="Error", text="Not found.")
     data = doc.to_dict()
-    
-    # Security Checks Again
-    if int(time.time()) > data['expiry']:
-        return render_template_string(HTML_ERROR, icon="⏳", title="Expired", text="Too late.")
-    if data['one_time'] and data['opened']:
-        return render_template_string(HTML_ERROR, icon="💔", title="Already Seen", text="Already vanished.")
-
-    # Mark as Opened
+    if int(time.time()) > data['expiry']: return render_template_string(HTML_ERROR, icon="⏳", title="Expired", text="Too late.")
+    if data['one_time'] and data['opened']: return render_template_string(HTML_ERROR, icon="💔", title="Already Seen", text="Already vanished.")
     doc_ref.update({"opened": True})
-    
     footer = "This secret is now locked in the past." if data['one_time'] else "You can return to this memory until it expires."
-    
-    return render_template_string(HTML_MESSAGE, 
-                                  message=data['message'], 
-                                  image_data=data['image_data'],
-                                  footer_text=footer)
+    return render_template_string(HTML_MESSAGE, message=data['message'], image_data=data['image_data'], footer_text=footer)
 
 if __name__ == "__main__":
     app.run(debug=True)
