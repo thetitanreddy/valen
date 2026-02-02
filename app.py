@@ -33,7 +33,8 @@ STYLE = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Lato:wght@300;400;700&display=swap');
 
-* { box-sizing: border-box; }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; /* Removes blue tap box on mobile */ }
+
 body {
     background-color: #0a0a0a;
     color: #e0e0e0;
@@ -89,11 +90,13 @@ textarea:focus, input:focus { border-color: #888; }
 }
 .btn:hover { transform: translateY(-3px) scale(1.02); background: #ffffff; }
 
-/* --- CUSTOM CHECKBOX STYLING (Fixes visibility) --- */
+/* --- CUSTOM CHECKBOX STYLING --- */
 .checkbox-container {
     display: flex; align-items: center; gap: 12px; font-size: 0.95rem;
     margin-bottom: 25px; cursor: pointer; opacity: 0.9; position: relative;
-    justify-content: center; /* Center the whole label */
+    justify-content: center;
+    user-select: none; /* Prevents text selection/blue highlight */
+    -webkit-tap-highlight-color: transparent; /* Removes mobile tap color */
 }
 .checkbox-container input { position: absolute; opacity: 0; cursor: pointer; height: 0; width: 0; }
 .checkmark {
@@ -101,12 +104,9 @@ textarea:focus, input:focus { border-color: #888; }
     background-color: #252525; border: 1px solid #444; border-radius: 6px; transition: all 0.3s;
 }
 .checkbox-container:hover input ~ .checkmark { background-color: #333; }
-/* When checked: White background */
 .checkbox-container input:checked ~ .checkmark { background-color: #fff; border-color: #fff; }
-/* The tick mark */
 .checkmark:after { content: ""; position: absolute; display: none; }
 .checkbox-container input:checked ~ .checkmark:after { display: block; }
-/* Black tick color and shape */
 .checkbox-container .checkmark:after {
     left: 8px; top: 4px; width: 6px; height: 12px;
     border: solid black; border-width: 0 2px 2px 0; transform: rotate(45deg);
@@ -201,7 +201,7 @@ HTML_CREATE = f"""
 </html>
 """
 
-# RESULT PAGE WITH NEW MINIMAL SHARE BUTTON
+# RESULT PAGE
 HTML_RESULT = f"""
 <!DOCTYPE html>
 <html>
@@ -245,7 +245,7 @@ HTML_RESULT = f"""
 </html>
 """
 
-# REPLY RESULT PAGE WITH NEW MINIMAL SHARE BUTTON
+# REPLY RESULT PAGE
 HTML_REPLY_RESULT = f"""
 <!DOCTYPE html>
 <html>
