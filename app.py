@@ -111,8 +111,17 @@ textarea, input[type="text"], input[type="number"], select {
     transition: 0.3s;
     text-transform: uppercase;
     letter-spacing: 1px;
+    text-decoration: none;
+    display: inline-block;
+    box-sizing: border-box;
 }
-.btn:hover { transform: scale(1.02); border-color: #fff; }
+.btn:hover { transform: scale(1.02); border-color: #fff; color: #fff; }
+
+.btn-download {
+    background: linear-gradient(180deg, #2c3e50, #000000);
+    border-color: #3498db;
+    margin-bottom: 20px;
+}
 
 /* ANTI-COPY PROTECTION */
 .protected-text {
@@ -131,7 +140,7 @@ a:hover { color: #fff; }
 </style>
 """
 
-# PAGE: CREATE SECRET (With JS for Drag & Drop)
+# PAGE: CREATE SECRET
 HTML_CREATE = f"""
 <!DOCTYPE html>
 <html>
@@ -145,8 +154,8 @@ HTML_CREATE = f"""
                 <textarea name="message" rows="4" placeholder="Write your secret here..." maxlength="300"></textarea>
                 
                 <div class="drop-zone" id="dropZone">
-                    <p>📸 Drag & Drop Photo<br><span style="font-size:0.8rem; opacity:0.6;">or click to browse</span></p>
-                    <input type="file" name="file" id="fileInput" accept="image/*" hidden>
+                    <p>📂 Drag & Drop File<br><span style="font-size:0.8rem; opacity:0.6;">(PDF, Doc, Image - Max 750KB)</span></p>
+                    <input type="file" name="file" id="fileInput" hidden>
                 </div>
                 <div id="filePreview" style="color: #51cf66; font-size: 0.9rem; margin-bottom: 15px; display: none;"></div>
                 
@@ -174,10 +183,8 @@ HTML_CREATE = f"""
         const fileInput = document.getElementById('fileInput');
         const filePreview = document.getElementById('filePreview');
 
-        // Click to browse
         dropZone.addEventListener('click', () => fileInput.click());
 
-        // Update name on change
         fileInput.addEventListener('change', () => {{
             if (fileInput.files.length) {{
                 filePreview.innerText = "✅ " + fileInput.files[0].name;
@@ -186,7 +193,6 @@ HTML_CREATE = f"""
             }}
         }});
 
-        // Drag Events
         dropZone.addEventListener('dragover', (e) => {{
             e.preventDefault();
             dropZone.classList.add('dragover');
@@ -199,7 +205,6 @@ HTML_CREATE = f"""
         dropZone.addEventListener('drop', (e) => {{
             e.preventDefault();
             dropZone.classList.remove('dragover');
-            
             if (e.dataTransfer.files.length) {{
                 fileInput.files = e.dataTransfer.files;
                 filePreview.innerText = "✅ " + e.dataTransfer.files[0].name;
@@ -266,8 +271,15 @@ HTML_MESSAGE = f"""
     <div class="container">
         <h1>💖</h1>
         <div class="card">
-            {{% if image_data %}}
-                <img src="data:image/jpeg;base64,{{{{ image_data }}}}" alt="Secret Image">
+            
+            {{% if file_data %}}
+                {{% if 'image' in file_type %}}
+                    <img src="data:{{{{ file_type }}}};base64,{{{{ file_data }}}}" alt="Secret Image">
+                {{% else %}}
+                    <a href="data:{{{{ file_type }}}};base64,{{{{ file_data }}}}" download="{{{{ file_name }}}}" class="btn btn-download">
+                        📥 Download {{{{ file_name }}}}
+                    </a>
+                {{% endif %}}
             {{% endif %}}
             
             <div class="protected-text" style="font-family: 'Cinzel Decorative', cursive; font-size: 1.8rem; margin: 30px 0; line-height: 1.4;">
@@ -306,19 +318,63 @@ HTML_ERROR = f"""
 """
 
 # --- 3. HELPER FUNCTIONS ---
-def process_image(file):
+def process_file(file):
+    """
+    Handles ANY file type.
+    - If Image: Resize & Compress to save space.
+    - If Other: Read raw bytes (Check size limit).
+    """
     try:
-        img = Image.open(file)
-        if img.mode in ("RGBA", "P"): img = img.convert("RGB")
-        max_dim = 800
-        if max(img.size) > max_dim:
-            img.thumbnail((max_dim, max_dim))
-        buf = io.BytesIO()
-        img.save(buf, format='JPEG', quality=70, optimize=True)
-        b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
-        if len(b64) > 1000000: return None 
-        return b64
-    except: return None
+        # Check size (Seek to end, get position, seek back)
+        file.seek(0, os.SEEK_END)
+        size = file.tell()
+        file.seek(0)
+        
+        # 750KB limit (approx) to be safe for Firestore 1MB limit
+        if size > 750000:
+            return None, "File too large. Max 750KB."
+
+        filename = file.filename
+        mime_type = file.content_type
+        b64_data = ""
+
+        # Optimization for Images
+        if mime_type.startswith('image/'):
+            try:
+                img = Image.open(file)
+                if img.mode in ("RGBA", "P"): img = img.convert("RGB")
+                max_dim = 800
+                if max(img.size) > max_dim:
+                    img.thumbnail((max_dim, max_dim))
+                
+                buf = io.BytesIO()
+                img.save(buf, format='JPEG', quality=70, optimize=True)
+                b64_data = base64.b64encode(buf.getvalue()).decode('utf-8')
+                # If we compressed it, update type/name to jpg
+                mime_type = 'image/jpeg' 
+            except:
+                # Fallback if PIL fails (treat as normal file)
+                file.seek(0)
+                data = file.read()
+                b64_data = base64.b64encode(data).decode('utf-8')
+        else:
+            # Generic File (PDF, Doc, etc.)
+            data = file.read()
+            b64_data = base64.b64encode(data).decode('utf-8')
+
+        # Final DB Safety Check
+        if len(b64_data) > 1048000:
+             return None, "Encoded file too large for database."
+
+        return {
+            "data": b64_data,
+            "name": filename,
+            "type": mime_type
+        }, None
+
+    except Exception as e:
+        print(f"File Error: {e}")
+        return None, "Error processing file."
 
 # --- 4. FLASK ROUTES ---
 @app.route("/", methods=["GET"])
@@ -330,11 +386,15 @@ def create():
     msg = request.form.get("message", "")
     f = request.files.get("file")
     
-    img_b64 = None
+    file_info = None
     if f and f.filename != '':
-        img_b64 = process_image(f)
-        if not img_b64 and len(msg) < 1:
-             return render_template_string(HTML_ERROR, icon="⚠️", title="Too Large", text="Image is too big or message is empty.")
+        result, error = process_file(f)
+        if error:
+             return render_template_string(HTML_ERROR, icon="⚠️", title="Upload Failed", text=error)
+        file_info = result
+
+    if not file_info and len(msg) < 1:
+         return render_template_string(HTML_ERROR, icon="⚠️", title="Empty", text="Write a message or attach a file.")
 
     try: val = int(request.form.get("duration_val", 15))
     except: val = 15
@@ -350,11 +410,14 @@ def create():
     
     doc = {
         "message": msg,
-        "image_data": img_b64,
         "created_at": int(time.time()),
         "expiry": expiry,
         "opened": False,
-        "one_time": one_time
+        "one_time": one_time,
+        # Save file details if they exist
+        "file_data": file_info['data'] if file_info else None,
+        "file_name": file_info['name'] if file_info else None,
+        "file_type": file_info['type'] if file_info else None
     }
     db.collection("links").document(link_id).set(doc)
     
@@ -387,9 +450,18 @@ def reveal(link_id):
     data = doc.to_dict()
     if int(time.time()) > data['expiry']: return render_template_string(HTML_ERROR, icon="⏳", title="Expired", text="Too late.")
     if data['one_time'] and data['opened']: return render_template_string(HTML_ERROR, icon="💔", title="Already Seen", text="Already vanished.")
+    
     doc_ref.update({"opened": True})
+    
     footer = "This secret is now locked in the past." if data['one_time'] else "You can return to this memory until it expires."
-    return render_template_string(HTML_MESSAGE, message=data['message'], image_data=data['image_data'], footer_text=footer)
+    
+    # Pass all file data to the template
+    return render_template_string(HTML_MESSAGE, 
+                                  message=data.get('message', ''), 
+                                  file_data=data.get('file_data'),
+                                  file_name=data.get('file_name'),
+                                  file_type=data.get('file_type', ''),
+                                  footer_text=footer)
 
 if __name__ == "__main__":
     app.run(debug=True)
